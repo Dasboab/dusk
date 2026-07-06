@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="DUSK">
   <meta name="theme-color" content="#0d0a16">
-  <title>DUSK v0.3</title>
+  <title>DUSK v0.4</title>
   <style>
     html,body{margin:0;height:100%;background:#0d0a16;color:#e9dfcf;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}
     iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0d0a16}
@@ -18,7 +18,7 @@
   <div id="fallback">
     <main>
       <h1>DUSK</h1>
-      <p>Loading v0.3 mobile/coastal prototype…</p>
+      <p>Loading v0.4 expanded tactical prototype…</p>
       <p><a href="./dusk_index_fixed.html">Open unpatched fallback</a></p>
     </main>
   </div>
@@ -37,8 +37,9 @@
           doc.body.appendChild(s);
         });
       }
-      inject('./v02_patch.js?b=3','DUSK v0.2 patch')
-        .then(()=>inject('./v03_patch.js?b=1','DUSK v0.3 patch'))
+      inject('./v02_patch.js?b=4','DUSK v0.2 patch')
+        .then(()=>inject('./v03_patch.js?b=2','DUSK v0.3 patch'))
+        .then(()=>inject('./v04_patch.js?b=1','DUSK v0.4 patch'))
         .catch(err=>console.error(err));
     });
   </script>
