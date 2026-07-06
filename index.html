@@ -6,72 +6,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="DUSK">
   <meta name="theme-color" content="#0d0a16">
-  <title>DUSK v0.4</title>
+  <meta http-equiv="refresh" content="0; url=./dusk_index_fixed.html">
+  <title>DUSK stable</title>
   <style>
-    html,body{margin:0;height:100%;background:#0d0a16;color:#e9dfcf;font-family:system-ui,-apple-system,sans-serif;overflow:hidden;touch-action:manipulation}
-    #boot{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;z-index:9999;background:#0d0a16}
+    html,body{margin:0;height:100%;background:#0d0a16;color:#e9dfcf;font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;text-align:center;padding:24px}
     a{color:#ffb454;font-weight:700}
-    .err{color:#ff5148;max-width:620px;white-space:pre-wrap;text-align:left}
   </style>
 </head>
 <body>
-  <div id="boot"><main><h1>DUSK</h1><p>Loading v0.4 native mobile build…</p></main></div>
-  <script>
-    (async function(){
-      const boot=document.getElementById('boot');
-      const cacheBust='b='+Date.now();
-      function fail(err){
-        console.error(err);
-        boot.style.display='grid';
-        boot.innerHTML='<main><h1>DUSK</h1><p class="err">Startup failed: '+String(err && err.message ? err.message : err).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))+'</p><p><a href="./dusk_index_fixed.html">Open unpatched fallback</a></p></main>';
-      }
-      function runScript({src, text, label}){
-        return new Promise((resolve,reject)=>{
-          const s=document.createElement('script');
-          if(src){
-            s.src=src;
-            s.onload=resolve;
-            s.onerror=()=>reject(new Error(label+' failed to load'));
-          }else{
-            s.textContent=text || '';
-            resolveSoon(s,resolve,reject,label);
-          }
-          document.body.appendChild(s);
-        });
-      }
-      function resolveSoon(s,resolve,reject,label){
-        try{setTimeout(resolve,0);}catch(e){reject(new Error(label+' failed: '+e.message));}
-      }
-      try{
-        const html=await fetch('./dusk_index_fixed.html?'+cacheBust,{cache:'no-store'}).then(r=>{
-          if(!r.ok) throw new Error('Base game failed to load: '+r.status);
-          return r.text();
-        });
-        const doc=new DOMParser().parseFromString(html,'text/html');
-        const scripts=[...doc.querySelectorAll('script')].map((s,i)=>({
-          src:s.getAttribute('src'),
-          text:s.src?null:s.textContent,
-          label:s.id||s.getAttribute('src')||('base inline script '+i)
-        }));
-        doc.querySelectorAll('script').forEach(s=>s.remove());
-        document.head.innerHTML=doc.head.innerHTML;
-        document.body.innerHTML=doc.body.innerHTML;
-        // Add a boot badge before executing the game; it disappears behind the game once ready.
-        const badge=document.createElement('div');
-        badge.id='duskLoaderBadge';
-        badge.textContent='loading patches…';
-        badge.style.cssText='position:fixed;left:10px;top:10px;z-index:99999;background:rgba(13,10,22,.9);border:1px solid rgba(255,180,84,.45);color:#ffb454;padding:5px 8px;font:11px system-ui;letter-spacing:.08em;text-transform:uppercase';
-        document.body.appendChild(badge);
-        for(const spec of scripts){
-          await runScript(spec);
-        }
-        await runScript({src:'./v02_patch.js?'+cacheBust,label:'v0.2 patch'});
-        await runScript({src:'./v03_patch.js?'+cacheBust,label:'v0.3 patch'});
-        await runScript({src:'./v04_patch.js?'+cacheBust,label:'v0.4 patch'});
-        badge.textContent='v0.4 patches loaded';
-        setTimeout(()=>{if(badge&&badge.parentNode)badge.remove();},2500);
-      }catch(err){fail(err);}
-    })();
-  </script>
+  <main>
+    <h1>DUSK</h1>
+    <p>Restoring stable playable build…</p>
+    <p><a href="./dusk_index_fixed.html">Open stable game</a></p>
+  </main>
 </body>
 </html>
