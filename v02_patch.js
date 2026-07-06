@@ -9,7 +9,6 @@
     if(window.__DUSK_V02_PATCHED__)return;
     window.__DUSK_V02_PATCHED__=true;
 
-    // --- Tech tree: naval expansion, airbase, drones, robotics, EW ---
     Object.assign(BDEF,{
       airfield :{name:'Air Base',cost:2200,time:18,hp:1700,power:-35,size:13,sight:24,prereq:'factory'},
       dronebay :{name:'Drone Bay',cost:1200,time:12,hp:1000,power:-25,size:8,sight:24,prereq:'factory'},
@@ -30,7 +29,15 @@
     ['mobilehq','reconuav','fpvdrone','interceptor','dogbot','droneugv','strikeuav'].forEach(t=>{if(!VEH_ORDER.includes(t))VEH_ORDER.push(t);});
     ['dronebay','robotics','ewcenter','airfield'].forEach(k=>{if(!G.queues[k])G.queues[k]=[];});
 
-    // --- Mesh reuse + simple air drone geometry ---
+    const oldMakeBuildingMesh=makeBuildingMesh;
+    makeBuildingMesh=function(type,team){
+      if(type==='airfield')return oldMakeBuildingMesh('factory',team);
+      if(type==='dronebay')return oldMakeBuildingMesh('barracks',team);
+      if(type==='robotics')return oldMakeBuildingMesh('factory',team);
+      if(type==='ewcenter')return oldMakeBuildingMesh('power',team);
+      return oldMakeBuildingMesh(type,team);
+    };
+
     const oldMakeUnitMesh=makeUnitMesh;
     makeUnitMesh=function(type,team){
       if(type==='mobilehq')return oldMakeUnitMesh('apc',team);
@@ -81,7 +88,17 @@
       return oldFireWeapon(u,t);
     };
 
-    // --- Mobile HQ deploy command ---
+    function deployMobileHQ(){
+      const u=G.selected.length===1&&G.selected[0];
+      if(!u||u.type!=='mobilehq')return;
+      const x=Math.round(u.pos.x/GRID)*GRID,z=Math.round(u.pos.z/GRID)*GRID;
+      if(!canPlace('conyard',x,z)){announce('Mobile HQ needs clear land to deploy');sfx.deny();return;}
+      u.dead=true;scene.remove(u.mesh);G.ents=G.ents.filter(e=>e!==u);G.selected=[];
+      const cy=spawnBuilding('conyard',x,z,0,true);setSelection([cy]);
+      announce('Mobile HQ deployed: base online');sfx.place();refreshSidebar();
+    }
+    window.deployMobileHQ=deployMobileHQ;
+
     const rally=document.getElementById('cRally');
     if(rally&&!document.getElementById('cDeploy')){
       const b=document.createElement('button');b.className='cbtn';b.id='cDeploy';b.innerHTML='DEP<small>deploy</small>';rally.after(b);CB.cDeploy=b;
@@ -93,17 +110,7 @@
       const b=document.getElementById('cDeploy');
       if(b)b.classList.toggle('off',!(G.selected.length===1&&G.selected[0].type==='mobilehq'));
     };
-    window.deployMobileHQ=function(){
-      const u=G.selected.length===1&&G.selected[0];
-      if(!u||u.type!=='mobilehq')return;
-      const x=Math.round(u.pos.x/GRID)*GRID,z=Math.round(u.pos.z/GRID)*GRID;
-      if(!canPlace('conyard',x,z)){announce('Mobile HQ needs clear land to deploy');sfx.deny();return;}
-      u.dead=true;scene.remove(u.mesh);G.ents=G.ents.filter(e=>e!==u);G.selected=[];
-      const cy=spawnBuilding('conyard',x,z,0,true);setSelection([cy]);
-      announce('Mobile HQ deployed: base online');sfx.place();refreshSidebar();
-    };
 
-    // --- Production: add new queues to the existing factory/navy system ---
     prodTick=function(dt){
       const rate=powerRatio(0)<1?0.5:1;
       if(powerRatio(0)<1&&G.t-G.lowPowerMsg>18){G.lowPowerMsg=G.t;announce('Low power: production slowed, turrets offline');sfx.alert();}
@@ -122,7 +129,6 @@
       refreshSidebar();
     };
 
-    // --- World patch: keep demo stable, add mobile expansion + coastal resources ---
     const oldBuildWorld=buildWorld;
     buildWorld=function(){
       oldBuildWorld();
@@ -131,13 +137,10 @@
       spawnOreField(118,52,12,1.25);spawnOreField(116,82,10,1.1);
       const ecy=G.ents.find(e=>!e.dead&&e.team===1&&e.type==='conyard');
       if(ecy){spawnBuilding('dronebay',119,-126,1);spawnBuilding('robotics',126,-114,1);}
+      ['dogbot','droneugv'].forEach(t=>{if(!AI_COMP.includes(t))AI_COMP.push(t);});
       announce('v0.2: Mobile HQ, airbase and drone tech online');
     };
 
-    const oldAI=AI_COMP.slice();
-    ['dogbot','droneugv'].forEach(t=>{if(!AI_COMP.includes(t))AI_COMP.push(t);});
-
-    // Tiny build badge so you know the patch loaded.
     const badge=document.createElement('div');badge.textContent='v0.2 mobile / drones';
     badge.style.cssText='position:fixed;left:10px;top:50px;z-index:80;font:10px system-ui;color:#37e0cf;background:rgba(13,10,22,.75);border:1px solid rgba(55,224,207,.35);padding:4px 7px;letter-spacing:.12em;text-transform:uppercase;pointer-events:none';
     document.body.appendChild(badge);
