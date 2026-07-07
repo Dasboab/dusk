@@ -3447,6 +3447,7 @@ aiTick=function(dt){
     if(!types.length) return Promise.resolve();
     return ensureLoader().then(loader=>Promise.all(types.map(t=>new Promise(res=>{
       loader.load(MODELS[t].url, g=>{const sc=g.scene||g.scenes[0];
+        var _lts=[]; sc.traverse(function(o){if(o.isLight)_lts.push(o);}); _lts.forEach(function(l){l.parent&&l.parent.remove(l);});
         if(MODELS[t].prep){try{MODELS[t].prep(sc);}catch(e){console.warn('[gltf] prep',t,e&&e.message);}}
         CACHE[t]={tmpl:sc, skinned:isSkinned(sc)}; res();},
         undefined, err=>{console.warn('[gltf] load failed',t,err&&err.message); res();});
@@ -3501,6 +3502,7 @@ aiTick=function(dt){
   };
   MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, yaw:0 };
   MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, yaw:0 };
+  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, yaw:0 };  /* Pickup Tank */
 
   if(Object.keys(MODELS).length) window.__loadModels();
 })();

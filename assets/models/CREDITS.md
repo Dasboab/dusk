@@ -11,3 +11,4 @@ Other:
 - dogbot.glb    -> AI-generated base mesh (Shap-E text-to-3D, public-domain output),
                    dressed in-engine with a gunmetal drone skin, team-tinted sensor
                    and muzzle, and a back-mounted cannon. Drone Dog unit.
+- heavy.glb     -> Pickup Tank   (654 tris)    : heavy unit
