@@ -2937,6 +2937,178 @@ aiTick=function(dt){
 })();
 /* ==================== END V0.5c ==================== */
 
+/* ==================== V0.5d TIER 3: MILITARISE ==================== */
+(function(){
+  /* ---- 1. faction palette: olive-steel vs dark rust ---- */
+  TEAM_COL[0]=0x6f7663;   // player: grey olive drab
+  TEAM_COL[1]=0x9c4034;   // enemy: dark rust red
+  // clear any cached textures/materials so they rebake with new colours
+  for(const k in TEXC)delete TEXC[k];
+  for(const k in MAT)delete MAT[k];
+  for(const k in PM)delete PM[k];
+
+  /* ---- 2. neutralise the purple toy tint on shared materials ---- */
+  const set=(m,c,e)=>{ if(!m)return; if(c!=null)m.color.setHex(c); if(e!=null&&m.emissive)m.emissive.setHex(e); };
+  try{
+    set(DARK,0x23262b); set(GUN,0x3d4149); set(PIPE,0x51565e);
+    set(GLASS,0x0c1418,0x06161c);         // dim cyan glass, not glowing
+    set(TYRE,0x17141b);
+    set(KHAKI,0x6d6a44);                   // olive webbing
+    set(LAMP,0x0a1410,0x1c5a34);           // tactical green, dimmer
+  }catch(e){console.warn('mat tint',e);}
+
+  /* ---- 3. grittier detail textures (camo, panels, wear, rivets) ---- */
+  function camo(x,w,h,base){
+    x.fillStyle=base;x.fillRect(0,0,w,h);
+    const blobs=[['rgba(0,0,0,.22)',7],['rgba(255,255,255,.06)',6],['rgba(60,50,30,.18)',6]];
+    for(const [col,n] of blobs){x.fillStyle=col;
+      for(let i=0;i<n;i++){const bx=(i*53+17)%w,by=(i*89+11)%h,r=10+(i*37)%22;
+        x.beginPath();x.ellipse(bx,by,r,r*0.66,(i*1.1),0,6.29);x.fill();}}
+  }
+  function rivets(x,w,h,step){x.fillStyle='rgba(0,0,0,.5)';
+    for(let i=step/2;i<w;i+=step)for(let j=step/2;j<h;j+=step){x.beginPath();x.arc(i,j,1.4,0,6.29);x.fill();}
+    x.fillStyle='rgba(255,255,255,.12)';
+    for(let i=step/2;i<w;i+=step)for(let j=step/2;j<h;j+=step)x.fillRect(i-1,j-2,1.5,1.5);}
+  function streaks(x,w,h,n){for(let i=0;i<n;i++){const gx=(i*67+9)%w;
+    const g=x.createLinearGradient(0,0,0,h);g.addColorStop(0,'rgba(0,0,0,.28)');g.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=g;x.fillRect(gx,0,2+(i*13)%3,h*(0.4+((i*29)%50)/100));}}
+  function scratches(x,w,h,n){x.strokeStyle='rgba(255,255,255,.10)';x.lineWidth=1;
+    for(let i=0;i<n;i++){x.beginPath();const sx=(i*41)%w,sy=(i*71)%h;x.moveTo(sx,sy);x.lineTo(sx+8+(i*7)%18,sy+(i%3-1)*3);x.stroke();}}
+
+  hullTex=function(team,dark){
+    return dTex('hull'+team+(dark?'d':''),128,128,(x,w,h)=>{
+      camo(x,w,h,teamHex(team));
+      x.fillStyle='rgba(0,0,0,'+(dark?0.42:0.16)+')';x.fillRect(0,0,w,h);
+      seams(x,w,h,32,0.4); rivets(x,w,h,32);
+      x.fillStyle='rgba(255,255,255,0.08)';x.fillRect(0,0,w,4);
+      x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(0,h-8,w,8);
+      streaks(x,w,h,7); scratches(x,w,h,10);
+    });
+  };
+  plateTex=function(team){
+    return dTex('plate'+team,128,128,(x,w,h)=>{
+      camo(x,w,h,'#33312e');
+      x.fillStyle=teamHex(team);x.globalAlpha=0.28;x.fillRect(0,0,w,h);x.globalAlpha=1;
+      seams(x,w,h,42,0.45); rivets(x,w,h,42);
+      x.fillStyle='#c98a2e';x.fillRect(0,6,w,3);            // amber marker line, not neon
+      x.fillStyle='rgba(0,0,0,0.6)';
+      for(let i=0;i<3;i++)x.fillRect(16+i*40,h-30,22,9);
+      streaks(x,w,h,8); scratches(x,w,h,8);
+    });
+  };
+  // windowTex is a const arrow; pre-bake its cache key to amber lit panes
+  dTex('win',128,64,(x,w,h)=>{
+    x.fillStyle='#0a0d12';x.fillRect(0,0,w,h);
+    x.shadowColor='#ffb454';x.shadowBlur=6;x.fillStyle='rgba(255,180,84,0.7)';
+    for(let i=0;i<6;i++)x.fillRect(8+i*20,20,12,24);
+  });
+  podTex=function(team){
+    return dTex('pod'+team,64,64,(x,w,h)=>{
+      camo(x,w,h,teamHex(team));
+      x.fillStyle='rgba(0,0,0,0.4)';x.fillRect(0,0,w,h);
+      for(let i=0;i<3;i++)for(let j=0;j<2;j++){
+        x.fillStyle='#0b0910';x.beginPath();x.arc(13+i*19,20+j*24,7,0,6.29);x.fill();
+        x.fillStyle='#2a2334';x.beginPath();x.arc(13+i*19,20+j*24,3.5,0,6.29);x.fill();}
+      rivets(x,w,h,20);
+    });
+  };
+
+  /* ---- 4. shared grime bump + roughness maps for painted surfaces ---- */
+  function noiseCanvas(rough){
+    const s=128,c=document.createElement('canvas');c.width=c.height=s;const x=c.getContext('2d');
+    const base=rough?170:128; x.fillStyle='rgb('+base+','+base+','+base+')';x.fillRect(0,0,s,s);
+    for(let i=0;i<5200;i++){const v=(rough?150:96)+((i*37)%90);x.fillStyle='rgba('+v+','+v+','+v+','+(rough?0.5:0.7)+')';
+      x.fillRect((i*53)%s,(i*97)%s,1,1);}
+    for(let i=0;i<26;i++){x.strokeStyle='rgba(60,60,60,'+(rough?0.5:0.35)+')';x.lineWidth=1;
+      x.beginPath();const sx=(i*61)%s;x.moveTo(sx,0);x.lineTo(sx+((i%5)-2)*6,s);x.stroke();}
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(2,2);return t;
+  }
+  const BUMP=noiseCanvas(false), ROUGHMAP=noiseCanvas(true);
+
+  /* ---- 5. militarise pass: matte metals, desaturate, add wear ---- */
+  const done=new WeakSet();
+  const tmpHSL={h:0,s:0,l:0};
+  function militariseMat(m){
+    if(!m||!m.isMeshStandardMaterial||done.has(m))return;
+    done.add(m);
+    const lit=m.emissive&&(m.emissive.r+m.emissive.g+m.emissive.b)>0.03;
+    if(lit){
+      // dim and desaturate glowing accents so they read tactical, not neon
+      m.emissive.getHSL(tmpHSL); m.emissive.setHSL(tmpHSL.h, Math.min(tmpHSL.s,0.55), Math.min(tmpHSL.l,0.32));
+      m.emissiveIntensity=Math.min(m.emissiveIntensity||1,0.75);
+      m.metalness=0.2; m.roughness=0.5; return;
+    }
+    // knock saturation and brightness back on any candy colour
+    m.color.getHSL(tmpHSL);
+    m.color.setHSL(tmpHSL.h, Math.min(tmpHSL.s,0.42), Math.min(tmpHSL.l,0.62));
+    const lum=0.299*m.color.r+0.587*m.color.g+0.114*m.color.b;
+    const metal = lum<0.24 && !m.map;   // dark, untextured -> gunmetal
+    if(metal){ m.metalness=0.62; m.roughness=0.46; }
+    else {                              // painted armour
+      m.metalness=0.18; m.roughness=0.82;
+      if(!m.bumpMap){m.bumpMap=BUMP; m.bumpScale=0.015;}
+      if(!m.roughnessMap){m.roughnessMap=ROUGHMAP;}
+    }
+    m.envMapIntensity=0.55;
+    m.needsUpdate=true;
+  }
+  function militariseMesh(root){
+    if(!root||!root.traverse)return;
+    root.traverse(n=>{
+      if(!n.isMesh||!n.material)return;
+      if(Array.isArray(n.material))n.material.forEach(militariseMat); else militariseMat(n.material);
+      // muddy the ground
+      if(n.geometry&&n.geometry.type==='PlaneGeometry'){
+        const gm=Array.isArray(n.material)?n.material[0]:n.material;
+        if(gm.isMeshStandardMaterial&&gm.vertexColors){gm.color.setHex(0x9c8f79);gm.roughness=0.97;gm.metalness=0;gm.needsUpdate=true;}
+      }
+    });
+  }
+
+  /* ---- 6. greebles: bolt-on military detail by class ---- */
+  const GMETAL=new THREE.MeshStandardMaterial({color:0x2a2c31,metalness:0.7,roughness:0.45});
+  const GDARK =new THREE.MeshStandardMaterial({color:0x1b1d21,metalness:0.5,roughness:0.6});
+  function antenna(g,x,z,hgt){
+    const a=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,hgt,5),GMETAL);
+    a.position.set(x,hgt/2,z);a.castShadow=true;g.add(a);
+    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),GDARK);tip.position.set(x,hgt,z);g.add(tip);
+  }
+  function boxD(g,w,h,d,x,y,z,mat){const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||GDARK);
+    b.position.set(x,y,z);b.castShadow=true;g.add(b);return b;}
+  function greeble(mesh,type,def,isB){
+    if(!mesh)return;
+    const bb=new THREE.Box3().setFromObject(mesh),sz=new THREE.Vector3();bb.getSize(sz);
+    const topY=bb.max.y-mesh.position.y, hw=sz.x/2, hd=sz.z/2;
+    if(isB){
+      antenna(mesh, hw*0.55, -hd*0.55, Math.max(2.2,sz.y*0.5));
+      boxD(mesh, hw*0.5, 0.5, hd*0.4, -hw*0.4, topY+0.25, hd*0.3, GMETAL);   // roof vent
+      boxD(mesh, 0.7, 0.5, 0.7, hw*0.1, topY+0.3, -hd*0.4, GDARK);            // duct
+      return;
+    }
+    if(!def||def.armor==='inf')return;         // no antennae on soldiers
+    if(def.domain==='air')return;              // keep aircraft clean
+    antenna(mesh, -hw*0.5, -hd*0.4, Math.max(1.4,sz.y*0.9)); // rear whip antenna
+    boxD(mesh, hw*0.8, 0.3, hd*0.7, 0, topY+0.15, -hd*0.1, GDARK); // stowage bin on deck
+  }
+
+  /* expose a single finisher for spawn + portrait bake to share */
+  window.__tier3Finish=function(mesh,type,def,isB){
+    if(window.__upgradeMesh)window.__upgradeMesh(mesh);  // v05b: to Standard + env
+    militariseMesh(mesh);
+    greeble(mesh,type,def,isB);
+  };
+  window.__militariseScene=militariseMesh;
+
+  /* ---- 7. hook world build + spawns (runs after earlier wraps) ---- */
+  const _bw=buildWorld;
+  buildWorld=function(){ _bw(); militariseMesh(scene); };
+  const _su=spawnUnit;
+  spawnUnit=function(t,x,z,tm){ const u=_su(t,x,z,tm); if(u&&u.mesh){militariseMesh(u.mesh); greeble(u.mesh,u.type,u.def,false);} return u; };
+  const _sb=spawnBuilding;
+  spawnBuilding=function(t,x,z,tm,inst){ const b=_sb(t,x,z,tm,inst); if(b&&b.mesh){militariseMesh(b.mesh); greeble(b.mesh,b.type,b.def,true);} return b; };
+})();
+/* ==================== END V0.5d ==================== */
+
 /* ============================ START / END ============================ */
 function endGame(win){
   if(G.over)return;
