@@ -1061,6 +1061,27 @@ function cyl(r1,r2,h,mat,x,y,z,rz){
   const m=new THREE.Mesh(CYG(r1,r2,h,10),mat);
   m.position.set(x,y,z);if(rz!==undefined)m.rotation.z=rz;m.castShadow=true;return m;
 }
+/* chamfered box: machined fillet edges that catch light, kills the flat-slab read */
+const _BXC={};
+function bxGeo(w,h,d){
+  const key=w.toFixed(2)+'_'+h.toFixed(2)+'_'+d.toFixed(2);
+  if(_BXC[key])return _BXC[key];
+  const c=Math.max(0.04,Math.min(w,h,d)*0.16);
+  const iw=Math.max(0.04,w-2*c), ih=Math.max(0.04,h-2*c), idp=Math.max(0.04,d-2*c);
+  const x=iw/2, y=ih/2, r=Math.min(c*1.4,Math.min(iw,ih)*0.34);
+  const s=new THREE.Shape();
+  s.moveTo(-x+r,-y); s.lineTo(x-r,-y); s.quadraticCurveTo(x,-y,x,-y+r);
+  s.lineTo(x,y-r); s.quadraticCurveTo(x,y,x-r,y);
+  s.lineTo(-x+r,y); s.quadraticCurveTo(-x,y,-x,y-r);
+  s.lineTo(-x,-y+r); s.quadraticCurveTo(-x,-y,-x+r,-y);
+  const g=new THREE.ExtrudeGeometry(s,{depth:idp,bevelEnabled:true,bevelThickness:c,bevelSize:c,bevelSegments:2,steps:1,curveSegments:3});
+  g.translate(0,0,-idp/2); g.computeVertexNormals();
+  return _BXC[key]=g;
+}
+function bx(w,h,d,mat,x,y,z,ry){
+  const m=new THREE.Mesh(bxGeo(w,h,d),mat);
+  m.position.set(x,y,z); if(ry)m.rotation.y=ry; m.castShadow=true; return m;
+}
 function lamp(w,h,d,mat,x,y,z){const m=box(w,h,d,mat,x,y,z);m.castShadow=false;return m;}
 function wheelRow(g,team,n,len,rad,y,xoff){
   const arr=[];
