@@ -3466,10 +3466,9 @@ aiTick=function(dt){
     return g;
   };
 
-  /* --- registered CC0 models --------------------------------------------- */
-  /* Drone Dog: RobotExpressive by Tomas Laulhe, CC0 (mod Don McCurdy). Biped
-     placeholder proving the pipeline live; swap the .glb for a quadruped later. */
-  MODELS.dogbot = { url:'assets/models/dogbot.glb', targetH:2.4, yaw:Math.PI };
+  /* --- registered CC0 models (Quaternius, CC0 1.0) ----------------------- */
+  MODELS.tank   = { url:'assets/models/tank.glb',   targetH:2.4, yaw:0 };
+  MODELS.dogbot = { url:'assets/models/dogbot.glb', targetH:2.2, yaw:0 };  /* Mech, Drone Dog slot */
 
   if(Object.keys(MODELS).length) window.__loadModels();
 })();
