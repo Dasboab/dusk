@@ -3170,8 +3170,8 @@ aiTick=function(dt){
 })();
 /* ==================== END V0.5e ==================== */
 
-/* ==================== V0.5f BAR VISIBILITY FIX ==================== */
-/* Health bars only show when the entity is damaged or currently selected. */
+/* ==================== V0.5f DISPLAY FIXES ==================== */
+/* (1) Health bars only show when the entity is damaged or selected. */
 (function(){
   const _draw=drawBar;
   drawBar=function(e){
@@ -3185,9 +3185,21 @@ aiTick=function(dt){
     for(const e of prev){ if(e&&e.bar){ e._selBar=false; drawBar(e); } }
     for(const e of G.selected){ if(e&&e.bar){ e._selBar=true; drawBar(e); } }
   };
-  // refresh every entity once the world is built so full-HP bars start hidden
+
+  /* (2) Fog-of-war plane hugs the terrain instead of floating ~8.4 above it,
+         so cleared sight areas sit on the ground under units, not as tiles above them. */
+  function lowerFog(){
+    scene.traverse(n=>{
+      if(n.isMesh && n.renderOrder===5 && n.material && n.material.transparent &&
+         n.material.map && n.material.map.image && n.material.map.image.width===256){
+        if(!n.userData._fogLowered){ n.position.y -= 8.05; n.userData._fogLowered=true; }
+      }
+    });
+  }
+  lowerFog();
+
   const _bw=buildWorld;
-  buildWorld=function(){ _bw(); for(const e of G.ents){ if(e.bar)drawBar(e); } };
+  buildWorld=function(){ _bw(); lowerFog(); for(const e of G.ents){ if(e.bar)drawBar(e); } };
 })();
 /* ==================== END V0.5f ==================== */
 
