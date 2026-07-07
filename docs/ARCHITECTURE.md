@@ -19,22 +19,27 @@ This is good for proving the concept, but hard to extend safely.
 
 ## Current deployment strategy
 
-For now, `index.html` loads the original game file inside an iframe and injects `v02_patch.js`.
+As of v0.5, `index.html` IS the game: one self contained file with the DOM UI, Three.js scene and
+all game logic in a single inline script. There is no iframe and no runtime patch injection.
 
-This gives us three advantages:
+The earlier iframe plus `v0x_patch.js` approach was dropped. It was fragile (patches monkey patched
+core functions by name and one call, `formation()`, referenced a function that never existed, which
+threw on every move order) and it made caching and debugging harder. The old patches are kept in
+`/archive` for reference only and are not loaded.
 
-1. We avoid repeatedly replacing a huge HTML file.
-2. We can add units/buildings/systems incrementally.
-3. The original demo remains available as a fallback.
+`index.html` is produced from the previous monolith by an offline assembler (`build_v05.py`, kept
+outside the repo) that splices a single integration block in before the START/END section. The
+output is plain HTML; nothing about the assembler is needed at runtime.
 
-## Recommended short-term structure
+## Current structure
 
 ```text
-/index.html
-/dusk_index_fixed.html      Original playable monolith
-/v02_patch.js               Incremental gameplay patch
+/index.html                 The game (self contained)
+/dusk_index_fixed.html      Previous stable monolith, fallback
+/archive/                   Retired runtime patches (reference only)
 /docs/ROADMAP.md
 /docs/ARCHITECTURE.md
+/docs/BACKEND.md
 ```
 
 ## Recommended medium-term structure

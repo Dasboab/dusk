@@ -25,44 +25,27 @@ DUSK is moving from a single-file RTS demo into a persistent combined-arms strat
 
 ## Version plan
 
-### v0.2: Tactical technology expansion
+### v0.5: Dawn Convoy (SHIPPED, native)
 
-Status: first patch framework added.
+The v0.2 to v0.5 goals below were originally scoped as separate runtime patches. They are now
+delivered together, natively, inside `index.html`. The patch loader has been retired.
 
-Goals:
-- Mobile HQ unit that can deploy into a Construction Yard.
-- Air Base, Drone Bay, Robotics Lab and EW Centre.
-- Recon UAV, FPV drone, Strike UAV, Drone Dog, Drone UGV and Counter-UAV team.
-- Preserve the current demo while enabling rapid iteration through patch files.
+Delivered:
+- Mobile HQ start: base arrives as a convoy and deploys into a Construction Yard (DEP button).
+- Tech buildings: Drone Bay, Robotics Lab, EW Centre, Air Base.
+- Units: Recon UAV, FPV strike drone, Strike UAV, Drone Dog, Drone UGV, Counter UAS team.
+- Naval: Landing Craft (carries 8, beaches troops on nearest land) and Coastal Frigate.
+- Systems: air movement over water with hover, FPV kamikaze with area damage, seaward naval
+  production, generic transport board/unload for any unit with a cargo capacity.
+- Map: coastal ore fields, enemy tech camps and picket ships, conforming roads, ridge rocks,
+  wrecks, and a subtle screen vignette.
+- Tested with a headless smoke test covering boot, move orders, deploy, production, kamikaze,
+  air flight, naval unload and a 130 second AI raid sim, with zero console errors.
 
-### v0.3: Mobile-base opening and naval viability
-
-Goals:
-- Replace fixed starting base with Mobile HQ start.
-- Better spawn locations near deployable coastline.
-- Coastal resource fields.
-- Landing craft and transport ships.
-- Naval Yard placement clarity.
-- Basic amphibious assault loop.
-
-### v0.4: Air power
-
-Goals:
-- Functional airfield with runway logic.
-- Hangars, fuel and radar dependencies.
-- Helicopter scout and gunship units.
-- Strike aircraft and air defence.
-- Aircraft require maintenance/fuel rather than acting like flying tanks.
-
-### v0.5: Drone and counter-drone warfare
-
-Goals:
-- Drone swarm mechanics.
-- FPV drones as cheap single-use weapons.
-- Recon drones as spotters for artillery/MLRS.
-- EW jamming zones.
-- Anti-drone infantry, vehicles and static defences.
-- Drone command-and-control vulnerabilities.
+Still open from these themes, deferred to later versions:
+- EW jamming zones and drone command-and-control links as a real vulnerability.
+- Aircraft fuel and maintenance instead of unlimited loiter.
+- Destroyable bridges and true chokepoint terrain (moves into v0.6).
 
 ### v0.6: Terrain as a weapon
 

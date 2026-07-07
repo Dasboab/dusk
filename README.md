@@ -1,18 +1,50 @@
-# DUSK: Operation First Light
+# DUSK: Dawn Convoy (v0.5)
 
-Static GitHub Pages build for the DUSK HTML game.
+A browser real time strategy game built as a single HTML file with Three.js (r128). Modern combined
+arms: armour, drones, counter drone teams, air power and a navy, on a dusk lit coastal map.
 
-## GitHub Pages setup
+## Play
 
-1. In this repository, open **Settings → Pages**.
-2. Set **Build and deployment → Source** to **Deploy from a branch**.
-3. Choose `main` and `/root`, then Save.
-4. Open the published Pages URL in Safari on iPad, then **Share → Add to Home Screen**.
+Open `index.html`. That file is the whole game, no build step and no runtime patching. Press START,
+escort the Mobile HQ to open ground, press **DEP** to deploy it into a Construction Yard, then build
+up and level the enemy Construction Yard.
 
-## Patch included
+`dusk_index_fixed.html` is kept as a known good fallback of the previous stable build.
 
-The iPad build is intended to make the Deploy button respond to `click`, `pointerup`, and `touchend`, and to surface startup errors on the landing screen rather than silently trapping the UI.
+## Hosting
 
-## Backend
+The live site runs on Cloudflare Pages, connected to this GitHub repository. Every push to `main`
+triggers an automatic deployment of the repo root, so `index.html` is served as the entry point.
+GitHub Pages is also configured (`.github/workflows/pages.yml`) as a mirror.
 
-The uploaded backend is a Cloudflare Worker API for accounts, scores, saves and shop functionality. It is not required just to start the local game. Add it later once the static game is running.
+If a deploy looks stale on an iPhone or iPad:
+
+1. Confirm the Cloudflare Pages dashboard shows the latest commit as the live deployment.
+2. Hard reload in Safari, or delete and re add the Home Screen icon (old builds get cached as a PWA).
+
+## What v0.5 adds
+
+- Mobile HQ start: the base arrives as a convoy from the west and deploys into a Construction Yard.
+- Drone Bay, Robotics Lab, EW Centre and Air Base tech buildings.
+- Recon UAV, FPV strike drone, Strike UAV, Drone Dog, Drone UGV and Counter UAS team.
+- Landing Craft and Coastal Frigate for amphibious play; troops beach onto the nearest land.
+- Air movement (units cross water and hover), kamikaze drone logic, seaward naval production.
+- Terrain dressing: conforming roads, ridge rocks and wrecks. Subtle screen vignette.
+
+## Repository layout
+
+```text
+/index.html                 The game (self contained)
+/dusk_index_fixed.html      Previous stable monolith, fallback
+/archive/                   Old runtime patch files (v02..v04), kept for reference only
+/docs/ROADMAP.md
+/docs/ARCHITECTURE.md
+/.github/workflows/pages.yml
+```
+
+## History
+
+Earlier iterations layered gameplay through `v0x_patch.js` files injected at runtime. One of those
+(`v04_patch.js`) called a `formation()` function that never existed, which threw on every move order
+and made the game look frozen. v0.5 folds the good ideas from those patches natively into
+`index.html` and retires the patch loader. The old patches now live in `/archive`.
