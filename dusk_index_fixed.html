@@ -1085,35 +1085,46 @@ function makeUnitMesh(type,team){
     const H=type==='heavy';const sc=H?1.28:1;
     g.add(box(2.5*sc,0.85*sc,3.5*sc,HM,0,0.85*sc,0));            /* hull */
     const gl=box(2.5*sc,0.42*sc,1.15*sc,HD,0,1.06*sc,-1.8*sc);gl.rotation.x=0.42;g.add(gl);
+    const nose=box(2.32*sc,0.5*sc,0.72*sc,HD,0,0.54*sc,-1.98*sc);nose.rotation.x=-0.5;g.add(nose); /* lower nose bevel */
     g.add(box(2.5*sc,0.5*sc,0.3*sc,HD,0,0.85*sc,1.72*sc));       /* rear plate */
-    g.add(box(0.5*sc,0.7*sc,3.7*sc,trkMat(),-1.25*sc,0.5*sc,0)); /* track blocks */
-    g.add(box(0.5*sc,0.7*sc,3.7*sc,trkMat(),1.25*sc,0.5*sc,0));
-    g.add(box(0.34*sc,0.1*sc,3.9*sc,td,-1.42*sc,1.0*sc,0));      /* fenders */
-    g.add(box(0.34*sc,0.1*sc,3.9*sc,td,1.42*sc,1.0*sc,0));
-    g.userData.wheels=wheelRow(g,team,H?4:3,2.6*sc,0.4*sc,0.4*sc,1.5*sc);
+    for(let i=-1;i<=1;i++)g.add(box(1.9*sc,0.05*sc,0.16*sc,DARK,0,1.295*sc,0.62*sc+i*0.3*sc)); /* engine deck grille */
+    g.add(cyl(0.26*sc,0.26*sc,0.1*sc,GUN,-0.58*sc,1.29*sc,-1.15*sc,0)); /* driver hatch */
+    for(let i=-1;i<=1;i++)g.add(box(0.46*sc,0.12*sc,0.22*sc,trkMat(),i*0.6*sc,1.19*sc,-1.66*sc)); /* spare track links on glacis */
+    for(const s of[-1,1]){
+      g.add(box(0.56*sc,0.66*sc,3.8*sc,trkMat(),1.28*s*sc,0.44*sc,0));        /* track run */
+      g.add(box(0.66*sc,0.14*sc,4.0*sc,td,1.3*s*sc,0.98*sc,0));               /* track guard */
+      g.add(cyl(0.34*sc,0.34*sc,0.52*sc,GUN,1.28*s*sc,0.42*sc,1.72*sc,Math.PI/2));  /* drive sprocket */
+      g.add(cyl(0.32*sc,0.32*sc,0.52*sc,GUN,1.28*s*sc,0.42*sc,-1.72*sc,Math.PI/2)); /* idler */
+      g.add(box(0.5*sc,0.24*sc,0.9*sc,DARK,1.28*s*sc,1.2*sc,(s>0?0.6:-0.7)*sc));    /* fender stowage bin */
+    }
+    g.userData.wheels=wheelRow(g,team,H?5:4,2.9*sc,0.36*sc,0.36*sc,1.28*sc); /* road wheels */
     g.add(lamp(0.22*sc,0.14*sc,0.08,LAMPA,-0.85*sc,1.24*sc,-2.12*sc));
     g.add(lamp(0.22*sc,0.14*sc,0.08,LAMPA,0.85*sc,1.24*sc,-2.12*sc));
-    g.add(cyl(0.09*sc,0.09*sc,0.55*sc,DARK,-0.72*sc,1.5*sc,1.5*sc));
-    g.add(cyl(0.09*sc,0.09*sc,0.55*sc,DARK,0.72*sc,1.5*sc,1.5*sc));
+    const ex=cyl(0.1*sc,0.1*sc,0.72*sc,DARK,1.02*sc,1.02*sc,1.65*sc,Math.PI/2);g.add(ex); /* exhaust */
     const tur=new THREE.Group();tur.position.y=1.5*sc;
-    tur.add(box(1.7*sc,0.62*sc,2.0*sc,HM,0,0.3*sc,0.1*sc));
-    tur.add(box(0.95*sc,0.5*sc,0.35*sc,DARK,0,0.3*sc,-0.98*sc)); /* mantlet */
+    tur.add(box(1.7*sc,0.62*sc,2.0*sc,HM,0,0.3*sc,0.1*sc));       /* turret body */
+    tur.add(box(1.26*sc,0.44*sc,0.7*sc,HM,0,0.32*sc,-1.02*sc));   /* sloped front cheek */
+    tur.add(box(0.95*sc,0.5*sc,0.35*sc,DARK,0,0.3*sc,-0.98*sc));  /* mantlet */
     const cup=cyl(0.26*sc,0.28*sc,0.26*sc,td,0.42*sc,0.7*sc,0.35*sc);tur.add(cup);
-    tur.add(box(0.4*sc,0.06*sc,0.4*sc,DARK,0.42*sc,0.85*sc,0.35*sc));
+    tur.add(box(0.4*sc,0.06*sc,0.4*sc,DARK,0.42*sc,0.85*sc,0.35*sc)); /* hatch */
+    const cmg=cyl(0.03*sc,0.03*sc,0.5*sc,GUN,0.42*sc,0.92*sc,0.02*sc);cmg.rotation.x=Math.PI/2;tur.add(cmg); /* commander MG */
+    const coax=cyl(0.04*sc,0.04*sc,0.85*sc,GUN,-0.3*sc,0.36*sc,-1.35*sc);coax.rotation.x=Math.PI/2;tur.add(coax); /* coax MG */
+    for(const s of[-1,1])for(let i=0;i<3;i++){const sm=cyl(0.05*sc,0.05*sc,0.24*sc,DARK,0.62*s*sc,0.5*sc,(-0.62+i*0.14)*sc);sm.rotation.x=1.15;tur.add(sm);} /* smoke launchers */
+    tur.add(box(1.42*sc,0.3*sc,0.62*sc,GUN,0,0.15*sc,1.2*sc));    /* bustle rack */
+    tur.add(box(1.3*sc,0.22*sc,0.03*sc,DARK,0,0.28*sc,1.5*sc));   /* rack back */
     if(H){
       for(const off of[-0.42,0.42]){
         const b=cyl(0.15*sc,0.12*sc,2.6*sc,GUN,off*sc,0.3*sc,-1.6*sc);b.rotation.x=Math.PI/2;tur.add(b);
         const sl=cyl(0.19*sc,0.19*sc,0.4*sc,DARK,off*sc,0.3*sc,-1.15*sc);sl.rotation.x=Math.PI/2;tur.add(sl);
         const mz=cyl(0.2*sc,0.2*sc,0.3*sc,DARK,off*sc,0.3*sc,-2.8*sc);mz.rotation.x=Math.PI/2;tur.add(mz);
       }
-      tur.add(box(1.5*sc,0.6*sc,0.9*sc,pMat('pd'+team,podTex(team)),0,0.62*sc,0.85*sc));
+      tur.add(box(1.5*sc,0.6*sc,0.9*sc,pMat('pd'+team,podTex(team)),0,0.62*sc,0.55*sc));
     }else{
       const b=cyl(0.16,0.12,2.5,GUN,0,0.3,-1.55);b.rotation.x=Math.PI/2;tur.add(b);
       const sl=cyl(0.2,0.2,0.42,DARK,0,0.3,-1.05);sl.rotation.x=Math.PI/2;tur.add(sl);
       const mz=cyl(0.22,0.22,0.32,DARK,0,0.3,-2.68);mz.rotation.x=Math.PI/2;tur.add(mz);
-      tur.add(box(1.4,0.34,0.5,DARK,0,0.44,0.85));               /* stowage */
     }
-    tur.add(cyl(0.03,0.015,1.3*sc,GUN,0.72*sc,1.0*sc,0.7*sc));
+    tur.add(cyl(0.03,0.015,1.3*sc,GUN,0.72*sc,1.0*sc,0.7*sc));   /* antenna */
     g.add(tur);g.userData.turret=tur;
   }else if(type==='apc'){
     g.add(box(2.4,0.9,4.2,HM,0,1.05,0));
@@ -1903,7 +1914,7 @@ function updateBuilding(b,dt){
 function animEnt(u,dt){
   const ud=u.mesh.userData;
   if(u.def.domain==='sea')u.pos.y=0.16+Math.sin(G.t*1.6+u.id*1.3)*0.05;
-  if(ud.wheels&&u.moving)for(const w of ud.wheels)w.rotation.x+=u.def.speed*dt*1.4;
+  if(ud.wheels&&u.moving)for(const w of ud.wheels)w.rotateY(u.def.speed*dt*1.4);
   if(ud.legL){
     u.animT+=dt*(u.moving?9:2);
     const sw=u.moving?0.55:0;
