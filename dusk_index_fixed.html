@@ -1145,7 +1145,17 @@ function makeUnitMesh(type,team){
     tur.add(cyl(0.4,0.45,0.4,td,0,0,0));
     tur.add(box(0.7,0.42,0.06,DARK,0,0.16,-0.4));                 /* gun shield */
     const mg=cyl(0.06,0.06,1.3,GUN,0,0.12,-0.7);mg.rotation.x=Math.PI/2;tur.add(mg);
+    tur.add(box(0.16,0.2,0.16,DARK,0.24,0.34,-0.12));            /* commander sight */
+    tur.add(lamp(0.1,0.07,0.04,LAMP,0.24,0.36,-0.21));
+    tur.add(box(0.34,0.05,0.34,DARK,-0.14,0.22,0.12));           /* gunner hatch */
+    for(const s of[-1,1])for(let i=0;i<2;i++){const sm=cyl(0.04,0.04,0.18,DARK,0.3*s,0.22,-0.42+i*0.13);sm.rotation.x=1.1;tur.add(sm);} /* smoke */
     g.add(tur);g.userData.turret=tur;
+    for(const s of[-1,1]){
+      g.add(box(0.1,0.46,2.6,GUN,1.28*s,1.5,0.2));               /* applique armour */
+      for(let i=-1;i<=1;i++)g.add(box(0.05,0.16,0.22,DARK,1.33*s,1.72,i*0.72)); /* vision blocks */
+      g.add(box(0.14,0.12,0.14,GUN,0.5*s,0.75,-2.28));           /* tow hooks */
+    }
+    g.add(box(1.3,0.3,0.4,GUN,0,1.16,2.2));                      /* rear stowage basket */
   }else if(type==='harvester'){
     g.add(box(2.6,1.1,4.4,HM,0,1.0,0.2));
     g.add(box(2.2,1.1,1.4,HD,0,1.9,-1.3));
@@ -1164,6 +1174,16 @@ function makeUnitMesh(type,team){
     g.add(cyl(0.1,0.1,0.9,DARK,1.0,2.6,-0.9));                    /* exhaust */
     g.add(lamp(0.16,0.16,0.16,LAMPA,-0.85,2.55,-1.3));            /* beacon */
     g.userData.wheels=wheelRow(g,team,3,3.4,0.55,0.55,1.42);
+    for(const s of[-1,1]){
+      const arm=cyl(0.11,0.11,1.7,GUN,0.75*s,1.15,-1.55);arm.rotation.x=-0.5;g.add(arm); /* scoop hydraulics */
+      g.add(box(0.06,0.34,3.0,hazMat(),1.32*s,1.32,0.2));        /* hazard stripe */
+    }
+    for(const s of[-1,1])g.add(box(0.08,0.52,0.08,DARK,1.0*s,2.3,-1.3)); /* roll cage posts */
+    g.add(box(2.0,0.08,0.08,DARK,0,2.56,-1.3));                  /* roll cage top */
+    g.add(lamp(0.16,0.16,0.16,LAMPA,0.85,2.55,-1.3));            /* 2nd beacon */
+    g.add(box(2.2,0.3,0.32,DARK,0,0.72,2.34));                   /* rear bumper */
+    for(let i=0;i<4;i++)g.add(box(0.34,0.04,0.05,DARK,1.36,1.0+i*0.26,-0.4)); /* side ladder */
+    const chute=box(1.6,0.5,0.5,GUN,0,1.72,2.25);chute.rotation.x=0.4;g.add(chute); /* ore chute */
   }else if(type==='mlrs'){
     g.add(box(2.2,0.5,4.6,HD,0,0.72,0));                          /* chassis */
     g.add(box(2.2,1.15,1.5,HM,0,1.55,-1.5));                      /* cab */
@@ -1182,7 +1202,17 @@ function makeUnitMesh(type,team){
     pod.add(box(1.85,0.16,0.12,hazMat(),0,1.1,1.3));
     tur.add(pod);
     const ram=cyl(0.09,0.09,1.2,PIPE,0.7,0.7,1.4);ram.rotation.x=0.6;tur.add(ram);
+    const ram2=cyl(0.09,0.09,1.2,PIPE,-0.7,0.7,1.4);ram2.rotation.x=0.6;tur.add(ram2);
+    for(const cx of[-0.6,-0.2,0.2,0.6])for(const cy of[0.28,0.82]){
+      const tb=cyl(0.15,0.15,0.5,GUN,cx,cy,-1.3);tb.rotation.x=Math.PI/2;pod.add(tb);    /* rocket tube */
+      const tin=cyl(0.1,0.1,0.54,DARK,cx,cy,-1.34);tin.rotation.x=Math.PI/2;pod.add(tin); /* tube bore */
+    }
     g.add(tur);g.userData.turret=tur;
+    g.add(box(1.6,0.5,1.3,pMat('pd'+team,podTex(team)),0,1.05,1.5)); /* reload rack */
+    for(const s of[-1,1]){
+      g.add(box(0.5,0.4,0.06,DARK,1.22*s,0.42,1.15));            /* mudflap */
+      g.add(box(0.5,0.14,0.16,DARK,1.3*s,1.75,-2.0));            /* cab mirror */
+    }
   }else if(type==='gunboat'){
     g.add(box(1.7,0.8,4.6,HM,0,0.45,0.2));                        /* hull */
     const bow=box(1.7,0.75,1.5,HD,0,0.6,-2.2);bow.rotation.x=-0.38;g.add(bow);
@@ -1198,7 +1228,16 @@ function makeUnitMesh(type,team){
     tur.add(cyl(0.42,0.5,0.45,td,0,0.1,-1.5));
     tur.add(box(0.5,0.3,0.06,DARK,0,0.2,-1.92));                  /* gun shield */
     const b=cyl(0.06,0.06,1.5,GUN,0,0.2,-2.3);b.rotation.x=Math.PI/2;tur.add(b);
+    tur.add(cyl(0.14,0.14,0.24,DARK,0,0.2,-1.92,Math.PI/2));     /* muzzle brake */
     g.add(tur);g.userData.turret=tur;
+    for(const s of[-1,1]){
+      g.add(box(0.04,0.22,3.6,GUN,0.86*s,1.05,0.2));             /* deck railing */
+      g.add(cyl(0.15,0.15,0.5,td,0.62*s,1.5,0.7,Math.PI/2));     /* life raft */
+    }
+    g.add(cyl(0.03,0.03,0.9,GUN,0,3.1,0.6));                     /* antenna whip */
+    g.add(box(0.5,0.2,0.4,DARK,0,1.5,2.15));                     /* aft MG mount */
+    const amg=cyl(0.05,0.05,0.8,GUN,0,1.68,1.9);amg.rotation.x=Math.PI/2;g.add(amg); /* aft MG */
+    g.add(lamp(0.12,0.1,0.08,LAMP,0,1.72,0.08));                 /* searchlight */
   }else if(type==='corvette'){
     g.add(box(2.1,1.05,6.6,HM,0,0.6,0.2));                        /* hull */
     const bow=box(2.1,1.0,2.0,HD,0,0.82,-3.1);bow.rotation.x=-0.3;g.add(bow);
@@ -1217,7 +1256,19 @@ function makeUnitMesh(type,team){
     const tur=new THREE.Group();tur.position.y=1.3;
     tur.add(box(0.9,0.5,1.1,HD,0,0.2,-2.5));
     const b=cyl(0.09,0.07,1.7,GUN,0,0.3,-3.3);b.rotation.x=Math.PI/2;tur.add(b);
+    tur.add(box(0.7,0.4,0.5,HD,0,0.28,-2.75));                   /* gun house front slope */
+    tur.add(cyl(0.13,0.13,0.24,DARK,0,0.3,-4.1,Math.PI/2));      /* muzzle */
     g.add(tur);g.userData.turret=tur;
+    const ciws=new THREE.Group();ciws.position.set(0,2.42,1.5);
+    ciws.add(cyl(0.26,0.3,0.3,td,0,0,0));                        /* CIWS base */
+    ciws.add(cyl(0.2,0.14,0.34,DARK,0,0.32,0));                  /* radome */
+    const cb=cyl(0.08,0.08,0.5,GUN,0,0.06,-0.3);cb.rotation.x=Math.PI/2;ciws.add(cb); /* gatling */
+    g.add(ciws);
+    for(const cx of[-0.45,0,0.45])for(const cz of[-2.0,-1.4])g.add(box(0.32,0.05,0.32,DARK,cx,1.43,cz)); /* VLS cells */
+    for(const s of[-1,1])g.add(box(0.04,0.2,6.0,GUN,1.06*s,1.34,0.2)); /* deck railings */
+    g.add(cyl(0.03,0.03,1.0,GUN,0,4.2,0.9));                     /* mast antenna */
+    g.add(cyl(0.3,0.24,0.12,DARK,0,2.42,1.9));                   /* funnel cap */
+    g.add(cyl(0.55,0.55,0.02,DARK,0,1.36,2.7));                  /* helideck ring */
   }
   return g;
 }
