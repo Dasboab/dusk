@@ -3395,6 +3395,85 @@ aiTick=function(dt){
 })();
 /* ==================== END V0.5g ==================== */
 
+/* ============================ GLTF MODEL PIPELINE ============================ */
+/* Realistic road: real modelled units drop in here as .glb files.
+   Any type NOT listed in MODELS uses its procedural mesh unchanged.
+   To convert a unit: drop assets/models/<name>.glb and add one line to MODELS.
+   The loader auto-frames to targetH, seats feet on the ground, applies yaw and
+   handles Draco compression and skinned meshes, so any export slots in cleanly. */
+(function(){
+  const MODELS = (window.MODELS = window.MODELS || {});
+  const CACHE  = {};     /* type -> {tmpl, skinned} */
+  let _loaderP = null;
+
+  const GLTF_URL  = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+  const DRACO_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js';
+  const SKEL_URL  = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js';
+  const DRACO_DEC = 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/';
+
+  function inject(src){return new Promise((res,rej)=>{const s=document.createElement('script');
+    s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('script '+src));document.head.appendChild(s);});}
+
+  function ensureLoader(){
+    if(_loaderP) return _loaderP;
+    _loaderP = (async()=>{
+      if(!(window.THREE&&THREE.GLTFLoader)) await inject(GLTF_URL);
+      if(!THREE.SkeletonUtils) await inject(SKEL_URL);            /* correct skinned cloning */
+      const loader=new THREE.GLTFLoader();
+      if(Object.values(MODELS).some(m=>m&&m.draco)){
+        if(!THREE.DRACOLoader) await inject(DRACO_URL);
+        const d=new THREE.DRACOLoader(); d.setDecoderPath(DRACO_DEC); loader.setDRACOLoader(d);
+      }
+      return loader;
+    })();
+    return _loaderP;
+  }
+
+  function isSkinned(o){let s=false;o.traverse(m=>{if(m.isSkinnedMesh)s=true;});return s;}
+
+  function normalise(root, spec){
+    let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
+    root.scale.setScalar(((spec.targetH||2.2)/(size.y||1))*(spec.scale||1));
+    box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
+    root.position.x-=c.x; root.position.z-=c.z; root.position.y-=box.min.y;
+    if(spec.yaw) root.rotation.y=spec.yaw;
+    root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;
+      if(o.material){o.material.envMapIntensity=(spec.env==null?1.0:spec.env);}}});
+    return root;
+  }
+
+  window.__loadModels = function(){
+    const types=Object.keys(MODELS);
+    if(!types.length) return Promise.resolve();
+    return ensureLoader().then(loader=>Promise.all(types.map(t=>new Promise(res=>{
+      loader.load(MODELS[t].url, g=>{const sc=g.scene||g.scenes[0];
+        CACHE[t]={tmpl:sc, skinned:isSkinned(sc)}; res();},
+        undefined, err=>{console.warn('[gltf] load failed',t,err&&err.message); res();});
+    })))).catch(e=>console.warn('[gltf] init failed', e&&e.message));
+  };
+  window.__gltfReady = function(t){return !!CACHE[t];};
+
+  const _mkPrev = makeUnitMesh;
+  makeUnitMesh = function(type,team){
+    const hit=CACHE[type];
+    if(!hit) return _mkPrev(type,team);
+    const spec=MODELS[type]||{};
+    const inst=(hit.skinned&&THREE.SkeletonUtils)?THREE.SkeletonUtils.clone(hit.tmpl):hit.tmpl.clone(true);
+    normalise(inst,spec);
+    const g=new THREE.Group(); g.add(inst);
+    if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
+    g.userData.gltf=true;
+    return g;
+  };
+
+  /* --- registered CC0 models --------------------------------------------- */
+  /* Drone Dog: RobotExpressive by Tomas Laulhe, CC0 (mod Don McCurdy). Biped
+     placeholder proving the pipeline live; swap the .glb for a quadruped later. */
+  MODELS.dogbot = { url:'assets/models/dogbot.glb', targetH:2.4, yaw:Math.PI };
+
+  if(Object.keys(MODELS).length) window.__loadModels();
+})();
+
 /* ============================ START / END ============================ */
 function endGame(win){
   if(G.over)return;
