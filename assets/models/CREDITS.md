@@ -12,3 +12,5 @@ Other:
                    dressed in-engine with a gunmetal drone skin, team-tinted sensor
                    and muzzle, and a back-mounted cannon. Drone Dog unit.
 - heavy.glb     -> Pickup Tank   (654 tris)    : heavy unit
+- heavy.glb     -> Pickup Tank   (654 tris)    : heavy unit
+- droneugv.glb  -> Robot Enemy   (4,380 tris)  : ground drone unit
