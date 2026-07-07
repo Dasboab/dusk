@@ -319,6 +319,9 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH?1.6:2));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
 container.appendChild(renderer.domElement);
 
 const scene=new THREE.Scene();
@@ -339,15 +342,26 @@ applyCam();
   gr.addColorStop(0,'#120f2a'); gr.addColorStop(.42,'#3d1e4e');
   gr.addColorStop(.66,'#a34a3f'); gr.addColorStop(.82,'#ff9d4a'); gr.addColorStop(1,'#ffc36e');
   g.fillStyle=gr; g.fillRect(0,0,2,256);
-  const tex=new THREE.CanvasTexture(c);
+  const tex=new THREE.CanvasTexture(c);tex.encoding=THREE.sRGBEncoding;
   const sky=new THREE.Mesh(new THREE.SphereGeometry(900,24,16),
-    new THREE.MeshBasicMaterial({map:tex, side:THREE.BackSide, fog:false}));
+    new THREE.MeshBasicMaterial({map:tex, side:THREE.BackSide, fog:false, toneMapped:false}));
   scene.add(sky);
   const sunGlow=new THREE.Mesh(new THREE.SphereGeometry(34,16,16),
-    new THREE.MeshBasicMaterial({color:0xffd9a0, fog:false}));
+    new THREE.MeshBasicMaterial({color:0xffd9a0, fog:false, toneMapped:false}));
   sunGlow.position.set(-320,55,-760); scene.add(sunGlow);
 }
 
+/* environment reflections (dusk) */
+{
+  const ec=document.createElement('canvas'); ec.width=16; ec.height=96;
+  const eg=ec.getContext('2d'), egr=eg.createLinearGradient(0,0,0,96);
+  egr.addColorStop(0,'#2a2340'); egr.addColorStop(.5,'#4a2c46'); egr.addColorStop(.74,'#8a4a36'); egr.addColorStop(1,'#241a16');
+  eg.fillStyle=egr; eg.fillRect(0,0,16,96);
+  const et=new THREE.CanvasTexture(ec); et.mapping=THREE.EquirectangularReflectionMapping;
+  const pm=new THREE.PMREMGenerator(renderer); pm.compileEquirectangularShader();
+  scene.environment=pm.fromEquirectangular(et).texture;
+  pm.dispose(); et.dispose();
+}
 const hemi=new THREE.HemisphereLight(0x5a4a8a, 0x241a20, 0.75); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffb070, 1.15);
 sun.position.set(-160,180,-120); sun.castShadow=true;
@@ -378,14 +392,14 @@ function buildTerrainGeo(){
     cols.push(c.r,c.g,c.b);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
-  const ter=new THREE.Mesh(geo, new THREE.MeshLambertMaterial({vertexColors:true}));
+  const ter=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, metalness:0.0, roughness:0.97}));
   ter.receiveShadow=true; scene.add(ter);
 }
 /* eastern sea */
 {
   const w=TSIZE/2-108;
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(w,TSIZE),
-    new THREE.MeshLambertMaterial({color:0x1c5468, transparent:true, opacity:0.85}));
+    new THREE.MeshStandardMaterial({color:new THREE.Color(0x1c5468).convertSRGBToLinear(), transparent:true, opacity:0.9, metalness:0.18, roughness:0.15, envMapIntensity:1.7}));
   sea.rotation.x=-Math.PI/2; sea.position.set(108+w/2, 0.1, 0);
   scene.add(sea);
 }
@@ -394,8 +408,8 @@ function buildTerrainGeo(){
 {
   const treeGeo=new THREE.ConeGeometry(1.4,4.6,6);
   const trunkGeo=new THREE.CylinderGeometry(0.28,0.36,1.6,5);
-  const tMat=new THREE.MeshLambertMaterial({color:0x1e3a34});
-  const kMat=new THREE.MeshLambertMaterial({color:0x3a2a28});
+  const tMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x1e3a34).convertSRGBToLinear(), metalness:0.0, roughness:0.82});
+  const kMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x3a2a28).convertSRGBToLinear(), metalness:0.0, roughness:0.86});
   const N=IS_TOUCH?190:260;
   const tI=new THREE.InstancedMesh(treeGeo,tMat,N), kI=new THREE.InstancedMesh(trunkGeo,kMat,N);
   tI.castShadow=kI.castShadow=true;
@@ -414,7 +428,7 @@ function buildTerrainGeo(){
   tI.count=kI.count=n; scene.add(tI); scene.add(kI);
 
   const rockGeo=new THREE.DodecahedronGeometry(1.1,0);
-  const rMat=new THREE.MeshLambertMaterial({color:0x574a5c});
+  const rMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x574a5c).convertSRGBToLinear(), metalness:0.06, roughness:0.8});
   const R=IS_TOUCH?60:90, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
   rI.castShadow=true; let rn=0; guard=0;
   while(rn<R && guard++<4000){
@@ -430,7 +444,7 @@ function buildTerrainGeo(){
 
 /* ore fields */
 const oreGeo=new THREE.OctahedronGeometry(0.85,0);
-const oreMat=new THREE.MeshLambertMaterial({color:0xffb44a, emissive:0x7a4a10});
+const oreMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0xffb44a).convertSRGBToLinear(), emissive:new THREE.Color(0x7a4a10).convertSRGBToLinear(), metalness:0.25, roughness:0.5, envMapIntensity:1.1});
 function spawnOreField(cx,cz,count,rich){
   for(let i=0;i<count;i++){
     const a=rand(0,6.28), rr=rand(1,8.5);
@@ -924,7 +938,7 @@ function dTex(key,w,h,fn){
   if(TEXC[key])return TEXC[key];
   const c=document.createElement('canvas');c.width=w;c.height=h;
   fn(c.getContext('2d'),w,h);
-  const t=new THREE.CanvasTexture(c);t.anisotropy=2;
+  const t=new THREE.CanvasTexture(c);t.anisotropy=4;t.encoding=THREE.sRGBEncoding;
   return TEXC[key]=t;
 }
 const teamHex=t=>'#'+TEAM_COL[t].toString(16).padStart(6,'0');
@@ -1003,26 +1017,35 @@ const siloTex=()=>dTex('silo',64,64,(x,w,h)=>{
   grime(x,w,h,4);
 });
 
-/* cached materials */
+/* shared procedural wear: roughness variation + micro bump */
+const WEAR=(()=>{
+  const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+  x.fillStyle='#8a8a8a'; x.fillRect(0,0,128,128);
+  for(let i=0;i<4200;i++){const v=(Math.random()*130+40)|0; x.fillStyle='rgba('+v+','+v+','+v+','+(0.15+Math.random()*0.5).toFixed(2)+')'; const s=Math.random()<0.12?2:1; x.fillRect(Math.random()*128|0,Math.random()*128|0,s,s);}
+  for(let i=0;i<26;i++){x.strokeStyle='rgba(190,190,190,'+(0.06+Math.random()*0.12).toFixed(2)+')'; x.lineWidth=Math.random()<0.5?1:2; x.beginPath(); const y=Math.random()*128; x.moveTo(0,y); x.lineTo(128,y+(Math.random()*20-10)); x.stroke();}
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+})();
+/* cached materials (PBR) */
 const MAT={},PM={};
+const SL=h=>new THREE.Color(h).convertSRGBToLinear();
 function teamMat(team,shade){
   const key=team+'_'+shade;
   if(!MAT[key]){
-    const c=new THREE.Color(TEAM_COL[team]).multiplyScalar(shade);
-    MAT[key]=new THREE.MeshLambertMaterial({color:c});
+    const c=new THREE.Color(TEAM_COL[team]).multiplyScalar(shade).convertSRGBToLinear();
+    MAT[key]=new THREE.MeshStandardMaterial({color:c,metalness:0.5,roughness:0.58,roughnessMap:WEAR,bumpMap:WEAR,bumpScale:0.015,envMapIntensity:0.9});
   }
   return MAT[key];
 }
-function pMat(key,tex){return PM[key]||(PM[key]=new THREE.MeshLambertMaterial({map:tex}));}
-const DARK=new THREE.MeshLambertMaterial({color:0x2a2233});
-const GUN=new THREE.MeshLambertMaterial({color:0x494258});
-const PIPE=new THREE.MeshLambertMaterial({color:0x5f5774});
-const GLASS=new THREE.MeshLambertMaterial({color:0x0a1a22,emissive:0x0a3a44});
-const TYRE=new THREE.MeshLambertMaterial({color:0x1c1822});
-const SKIN=new THREE.MeshLambertMaterial({color:0xd9b08c});
-const KHAKI=new THREE.MeshLambertMaterial({color:0x82724f});
-const LAMP=new THREE.MeshLambertMaterial({color:0x08131a,emissive:0x2ad4c4});
-const LAMPA=new THREE.MeshLambertMaterial({color:0x1a1206,emissive:0xd08a2a});
+function pMat(key,tex){return PM[key]||(PM[key]=(tex.encoding=THREE.sRGBEncoding,new THREE.MeshStandardMaterial({map:tex,metalness:0.45,roughness:0.62,roughnessMap:WEAR,bumpMap:WEAR,bumpScale:0.015,envMapIntensity:0.85})));}
+const DARK=new THREE.MeshStandardMaterial({color:SL(0x2a2233),metalness:0.62,roughness:0.52,roughnessMap:WEAR,bumpMap:WEAR,bumpScale:0.02,envMapIntensity:0.8});
+const GUN=new THREE.MeshStandardMaterial({color:SL(0x494258),metalness:0.78,roughness:0.44,roughnessMap:WEAR,bumpMap:WEAR,bumpScale:0.02,envMapIntensity:1.0});
+const PIPE=new THREE.MeshStandardMaterial({color:SL(0x5f5774),metalness:0.7,roughness:0.5,roughnessMap:WEAR,envMapIntensity:0.95});
+const GLASS=new THREE.MeshStandardMaterial({color:SL(0x0a1a22),emissive:SL(0x0a3a44),metalness:0.2,roughness:0.12,envMapIntensity:1.5});
+const TYRE=new THREE.MeshStandardMaterial({color:SL(0x1c1822),metalness:0.0,roughness:0.92,bumpMap:WEAR,bumpScale:0.03});
+const SKIN=new THREE.MeshStandardMaterial({color:SL(0xd9b08c),metalness:0.0,roughness:0.72});
+const KHAKI=new THREE.MeshStandardMaterial({color:SL(0x82724f),metalness:0.0,roughness:0.85,roughnessMap:WEAR});
+const LAMP=new THREE.MeshStandardMaterial({color:SL(0x08131a),emissive:SL(0x2ad4c4),emissiveIntensity:2.4,metalness:0,roughness:0.4});
+const LAMPA=new THREE.MeshStandardMaterial({color:SL(0x1a1206),emissive:SL(0xd08a2a),emissiveIntensity:2.4,metalness:0,roughness:0.4});
 const hMat=(t,d)=>pMat('h'+t+(d?'d':''),hullTex(t,d));
 const wallMat=t=>pMat('p'+t,plateTex(t));
 const doorMat=t=>pMat('dr'+t,doorTex(t));
@@ -1162,7 +1185,7 @@ function makeUnitMesh(type,team){
     g.add(box(1.7,0.55,0.06,winMat(),0,2.0,-2.02));
     g.add(box(2.3,0.14,0.08,hazMat(),0,2.32,-0.55));              /* hopper rim */
     g.add(box(2.3,0.14,0.08,hazMat(),0,2.32,2.15));
-    const load=box(2.0,0.9,2.2,new THREE.MeshLambertMaterial({color:0xffb44a,emissive:0x5a3208}),0,1.8,0.8);
+    const load=box(2.0,0.9,2.2,new THREE.MeshStandardMaterial({color:SL(0xffb44a),emissive:SL(0x5a3208),metalness:0.25,roughness:0.55}),0,1.8,0.8);
     load.scale.y=0.05;g.add(load);g.userData.load=load;
     const scoop=new THREE.Group();scoop.position.set(0,0.7,-2.5);
     const drum=cyl(0.66,0.66,2.3,GUN,0,0,0,Math.PI/2);scoop.add(drum);
@@ -1996,8 +2019,7 @@ function explosion(pos,s){
   const x=pos.x,y=pos.y,z=pos.z,big=s>1.05;
   flash(new THREE.Vector3(x,y+0.6,z),2.4*s);
   for(let i=0;i<(big?12:6);i++){
-    const m=new THREE.Mesh(debrisGeo,new THREE.MeshLambertMaterial({color:i%3?0x3a3038:0xff8a40,
-      emissive:i%3?0x000000:0xd0500a}));
+    const m=new THREE.Mesh(debrisGeo,new THREE.MeshStandardMaterial({color:SL(i%3?0x3a3038:0xff8a40),emissive:SL(i%3?0x000000:0xd0500a),metalness:0.4,roughness:0.6}));
     m.position.set(x,y+0.5,z);m.scale.setScalar(rand(0.5,1.4)*s*0.7);
     scene.add(m);
     G.particles.push({kind:'debris',mesh:m,life:rand(0.5,1.0),max:1,
