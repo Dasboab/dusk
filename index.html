@@ -3170,6 +3170,27 @@ aiTick=function(dt){
 })();
 /* ==================== END V0.5e ==================== */
 
+/* ==================== V0.5f BAR VISIBILITY FIX ==================== */
+/* Health bars only show when the entity is damaged or currently selected. */
+(function(){
+  const _draw=drawBar;
+  drawBar=function(e){
+    _draw(e);
+    if(e.bar&&e.bar.spr) e.bar.spr.visible = !!e._selBar || (e.hp < e.maxhp - 0.01);
+  };
+  const _sel=setSelection;
+  setSelection=function(list){
+    const prev=G.selected.slice();
+    _sel(list);
+    for(const e of prev){ if(e&&e.bar){ e._selBar=false; drawBar(e); } }
+    for(const e of G.selected){ if(e&&e.bar){ e._selBar=true; drawBar(e); } }
+  };
+  // refresh every entity once the world is built so full-HP bars start hidden
+  const _bw=buildWorld;
+  buildWorld=function(){ _bw(); for(const e of G.ents){ if(e.bar)drawBar(e); } };
+})();
+/* ==================== END V0.5f ==================== */
+
 /* ============================ START / END ============================ */
 function endGame(win){
   if(G.over)return;
