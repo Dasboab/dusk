@@ -3069,27 +3069,52 @@ aiTick=function(dt){
   /* ---- 6. greebles: bolt-on military detail by class ---- */
   const GMETAL=new THREE.MeshStandardMaterial({color:0x2a2c31,metalness:0.7,roughness:0.45});
   const GDARK =new THREE.MeshStandardMaterial({color:0x1b1d21,metalness:0.5,roughness:0.6});
-  function antenna(g,x,z,hgt){
+  function antenna(g,x,z,hgt,baseY){
+    baseY=baseY||0;
     const a=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,hgt,5),GMETAL);
-    a.position.set(x,hgt/2,z);a.castShadow=true;g.add(a);
-    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),GDARK);tip.position.set(x,hgt,z);g.add(tip);
+    a.position.set(x,baseY+hgt/2,z);a.castShadow=true;g.add(a);
+    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6),GDARK);tip.position.set(x,baseY+hgt,z);g.add(tip);
   }
   function boxD(g,w,h,d,x,y,z,mat){const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat||GDARK);
     b.position.set(x,y,z);b.castShadow=true;g.add(b);return b;}
   function greeble(mesh,type,def,isB){
     if(!mesh)return;
-    const bb=new THREE.Box3().setFromObject(mesh),sz=new THREE.Vector3();bb.getSize(sz);
-    const topY=bb.max.y-mesh.position.y, hw=sz.x/2, hd=sz.z/2;
+    /* Measure the structural hull in the mesh's OWN local frame, ignoring the
+       selection ring, the health-bar sprite, world rotation and thin masts.
+       Then bolt detail onto the real DECK (top of the main body, not the overall
+       top) and CAP its size, so it can never float off as a big dark tile.      */
+    mesh.updateMatrixWorld(true);
+    const _inv=new THREE.Matrix4().copy(mesh.matrixWorld).invert();
+    const _m=new THREE.Matrix4(), _s=new THREE.Vector3();
+    const bb=new THREE.Box3(); const parts=[]; let maxFoot=0;
+    mesh.traverse(n=>{
+      if(n===mesh||!n.isMesh)return;                           // skip the bar sprite
+      if(n.geometry&&n.geometry.type==='RingGeometry')return;  // skip the selection ring
+      n.geometry.computeBoundingBox();
+      const gb=n.geometry.boundingBox.clone().applyMatrix4(_m.multiplyMatrices(_inv,n.matrixWorld));
+      gb.getSize(_s);
+      if(Math.max(_s.x,_s.z)<0.35 && _s.y>0.8)return;          // skip thin masts / antennae
+      bb.union(gb);
+      const foot=_s.x*_s.z; if(foot>maxFoot)maxFoot=foot;
+      parts.push({foot:foot, top:gb.max.y});
+    });
+    if(bb.isEmpty())bb.setFromObject(mesh);
+    const sz=bb.getSize(new THREE.Vector3());
+    const hw=sz.x/2, hd=sz.z/2;
+    /* deck = top of the tallest SUBSTANTIAL part (>=40% of the widest footprint),
+       so a slim radar mast or whip cannot drag the deck up to the sky.           */
+    let deckY=bb.max.y, dy=-1e9;
+    for(const pt of parts) if(pt.foot>=maxFoot*0.4 && pt.top>dy) dy=pt.top;
+    if(dy>-1e8) deckY=dy;
     if(isB){
-      antenna(mesh, hw*0.55, -hd*0.55, Math.max(2.2,sz.y*0.5));
-      boxD(mesh, hw*0.5, 0.5, hd*0.4, -hw*0.4, topY+0.25, hd*0.3, GMETAL);   // roof vent
-      boxD(mesh, 0.7, 0.5, 0.7, hw*0.1, topY+0.3, -hd*0.4, GDARK);            // duct
+      antenna(mesh, hw*0.55, -hd*0.55, 2.0, deckY);
+      boxD(mesh, Math.min(hw*0.5,1.3), 0.4, Math.min(hd*0.4,1.1), -hw*0.35, deckY+0.2, hd*0.25, GMETAL); // roof vent
       return;
     }
-    if(!def||def.armor==='inf')return;         // no antennae on soldiers
+    if(!def||def.armor==='inf')return;         // no greebles on soldiers
     if(def.domain==='air')return;              // keep aircraft clean
-    antenna(mesh, -hw*0.5, -hd*0.4, Math.max(1.4,sz.y*0.9)); // rear whip antenna
-    boxD(mesh, hw*0.8, 0.3, hd*0.7, 0, topY+0.15, -hd*0.1, GDARK); // stowage bin on deck
+    antenna(mesh, -hw*0.5, -hd*0.4, 1.3, deckY);                                                          // rear whip antenna
+    boxD(mesh, Math.min(hw*0.7,1.0), 0.26, Math.min(hd*0.6,1.2), 0, deckY+0.13, -hd*0.15, GDARK);         // small stowage bin
   }
 
   /* expose a single finisher for spawn + portrait bake to share */
@@ -3202,6 +3227,59 @@ aiTick=function(dt){
   buildWorld=function(){ _bw(); lowerFog(); for(const e of G.ents){ if(e.bar)drawBar(e); } };
 })();
 /* ==================== END V0.5f ==================== */
+
+/* ==================== V0.5g HIGH-POLY MESHES ==================== */
+/* Lifts every unit and building: bevelled hulls (rounded boxes with smooth
+   analytic normals + preserved UVs so PBR maps still apply), and much denser
+   cylinders / spheres / cones for round wheels, domes, barrels and heads.     */
+(function(){
+  /* rounded box: morph a segmented unit cube onto a rounded shell.
+     Normal is the direction from the clamped inner box, so it is identical for
+     coincident corner vertices from different faces -> seamless smooth bevels,
+     with the original box UVs left intact for the normal / roughness maps.     */
+  function roundedBox(w,h,d,radius,seg){
+    const g=new THREE.BoxGeometry(1,1,1,seg,seg,seg);
+    const inx=Math.max(1e-5,w/2-radius), iny=Math.max(1e-5,h/2-radius), inz=Math.max(1e-5,d/2-radius);
+    const pos=g.attributes.position, nrm=g.attributes.normal;
+    for(let i=0;i<pos.count;i++){
+      const vx=pos.getX(i)*w, vy=pos.getY(i)*h, vz=pos.getZ(i)*d;
+      const cx=Math.max(-inx,Math.min(inx,vx)), cy=Math.max(-iny,Math.min(iny,vy)), cz=Math.max(-inz,Math.min(inz,vz));
+      let dx=vx-cx, dy=vy-cy, dz=vz-cz;
+      const len=Math.hypot(dx,dy,dz)||1;
+      const k=radius/len; dx*=k; dy*=k; dz*=k;
+      pos.setXYZ(i, cx+dx, cy+dy, cz+dz);
+      nrm.setXYZ(i, dx/radius, dy/radius, dz/radius);
+    }
+    pos.needsUpdate=true; nrm.needsUpdate=true;
+    return g;
+  }
+  const RBC={};
+  BG=function(w,h,d){
+    const k=w+'_'+h+'_'+d;
+    if(RBC[k])return RBC[k];
+    const mn=Math.min(w,h,d), mx=Math.max(w,h,d);
+    const radius=Math.max(0.015, Math.min(mn*0.22, 0.32));
+    const seg = mx>=3 ? 3 : 2;
+    return RBC[k]=roundedBox(w,h,d,radius,seg);
+  };
+
+  /* denser cylinders everywhere (wheels, barrels, cupolas, funnels, drums) */
+  const _CYG=CYG;
+  CYG=function(r1,r2,h,s){ return _CYG(r1,r2,h, Math.max(s|0,32)); };
+
+  /* denser spheres and cones for anything built from here on */
+  const _Sph=THREE.SphereGeometry;
+  THREE.SphereGeometry=function(r,ws,hs,ps,pl,ts,tl){
+    return new _Sph(r, Math.max(ws|0,32), Math.max(hs|0,20), ps,pl,ts,tl);
+  };
+  THREE.SphereGeometry.prototype=_Sph.prototype;
+  const _Cone=THREE.ConeGeometry;
+  THREE.ConeGeometry=function(r,h,rs,hs,oe,ts,tl){
+    return new _Cone(r, h, Math.max(rs|0,24), hs,oe,ts,tl);
+  };
+  THREE.ConeGeometry.prototype=_Cone.prototype;
+})();
+/* ==================== END V0.5g ==================== */
 
 /* ============================ START / END ============================ */
 function endGame(win){
