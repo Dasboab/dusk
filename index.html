@@ -125,6 +125,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   .cbtn{width:44px;min-height:40px;}
 }
 </style>
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23120c18'/><rect x='2' y='7' width='12' height='2' fill='%23ffb454'/></svg>">
 <style id="v05css">
 .bbtn.hasico{position:relative;padding-left:56px;min-height:48px}
 .bbtn .ico{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.65))}
@@ -3108,6 +3109,66 @@ aiTick=function(dt){
   spawnBuilding=function(t,x,z,tm,inst){ const b=_sb(t,x,z,tm,inst); if(b&&b.mesh){militariseMesh(b.mesh); greeble(b.mesh,b.type,b.def,true);} return b; };
 })();
 /* ==================== END V0.5d ==================== */
+
+/* ==================== V0.5e CC0 PBR TEXTURE PASS ==================== */
+/* Local, self-hosted maps from ambientCG (CC0). No remote runtime deps. */
+(function(){
+  const TL=new THREE.TextureLoader();
+  function load(path,{srgb=false,rep=1}={}){
+    const t=TL.load(path);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(rep,rep); t.anisotropy=4;
+    if(srgb)t.encoding=THREE.sRGBEncoding;
+    return t;
+  }
+  // armour microsurface (shared across all painted units/buildings)
+  const ARMOR_N=load('assets/textures/armor_n.jpg',{rep:2});
+  const ARMOR_R=load('assets/textures/armor_r.jpg',{rep:2});
+  // ground / mud (tiled hard across the terrain plane)
+  const GROUND_C=load('assets/textures/ground_c.jpg',{srgb:true,rep:34});
+  const GROUND_N=load('assets/textures/ground_n.jpg',{rep:34});
+  const GROUND_R=load('assets/textures/ground_r.jpg',{rep:34});
+
+  function pbr(m){
+    if(!m||!m.isMeshStandardMaterial||m.userData.pbr)return;
+    const lit=m.emissive&&(m.emissive.r+m.emissive.g+m.emissive.b)>0.03;
+    if(lit){m.userData.pbr=true;return;}                 // leave glowing accents alone
+    m.userData.pbr=true;
+    m.bumpMap=null;                                       // replace procedural bump with real normal
+    m.normalMap=ARMOR_N; m.normalScale=new THREE.Vector2(0.6,0.6);
+    m.roughnessMap=ARMOR_R;
+    m.needsUpdate=true;
+  }
+  function applyPBR(root){
+    if(!root||!root.traverse)return;
+    root.traverse(n=>{
+      if(!n.isMesh||!n.material)return;
+      // terrain: lay real dirt over the vertex-colour tint
+      if(n.geometry&&n.geometry.type==='PlaneGeometry'){
+        const gm=Array.isArray(n.material)?n.material[0]:n.material;
+        if(gm.isMeshStandardMaterial&&gm.vertexColors&&!gm.userData.pbr){
+          gm.userData.pbr=true;
+          gm.map=GROUND_C; gm.normalMap=GROUND_N; gm.roughnessMap=GROUND_R;
+          gm.normalScale=new THREE.Vector2(0.8,0.8);
+          gm.color.setHex(0xc4b79e);                      // lifts map so vertex tint reads as variation
+          gm.roughness=1; gm.metalness=0; gm.needsUpdate=true;
+        }
+        return;
+      }
+      if(Array.isArray(n.material))n.material.forEach(pbr); else pbr(n.material);
+    });
+  }
+  window.__applyPBR=applyPBR;
+
+  // chain after the tier3 finisher so portraits get the same treatment
+  if(window.__tier3Finish){
+    const _f=window.__tier3Finish;
+    window.__tier3Finish=function(mesh,type,def,isB){ _f(mesh,type,def,isB); applyPBR(mesh); };
+  }
+  const _bw=buildWorld;   buildWorld  =function(){ _bw(); applyPBR(scene); };
+  const _su=spawnUnit;    spawnUnit   =function(t,x,z,tm){ const u=_su(t,x,z,tm); if(u&&u.mesh)applyPBR(u.mesh); return u; };
+  const _sb=spawnBuilding;spawnBuilding=function(t,x,z,tm,a){ const b=_sb(t,x,z,tm,a); if(b&&b.mesh)applyPBR(b.mesh); return b; };
+})();
+/* ==================== END V0.5e ==================== */
 
 /* ============================ START / END ============================ */
 function endGame(win){
