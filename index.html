@@ -3447,6 +3447,7 @@ aiTick=function(dt){
     if(!types.length) return Promise.resolve();
     return ensureLoader().then(loader=>Promise.all(types.map(t=>new Promise(res=>{
       loader.load(MODELS[t].url, g=>{const sc=g.scene||g.scenes[0];
+        if(MODELS[t].prep){try{MODELS[t].prep(sc);}catch(e){console.warn('[gltf] prep',t,e&&e.message);}}
         CACHE[t]={tmpl:sc, skinned:isSkinned(sc)}; res();},
         undefined, err=>{console.warn('[gltf] load failed',t,err&&err.message); res();});
     })))).catch(e=>console.warn('[gltf] init failed', e&&e.message));
@@ -3463,12 +3464,41 @@ aiTick=function(dt){
     const g=new THREE.Group(); g.add(inst);
     if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
     g.userData.gltf=true;
+    if(spec.dress){try{spec.dress(g,team);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
     return g;
   };
 
   /* --- registered CC0 models (Quaternius, CC0 1.0) ----------------------- */
   MODELS.tank   = { url:'assets/models/tank.glb',   targetH:2.4, yaw:0 };
-  MODELS.dogbot = { url:'assets/models/dogbot.glb', targetH:2.2, yaw:0 };  /* Mech, Drone Dog slot */
+  /* Drone Dog: AI-generated base mesh (Shap-E, public domain output), dressed at
+     runtime with a gunmetal drone skin, team-tinted sensor + muzzle, and a
+     back-mounted cannon. One asset, no baked colours. */
+  MODELS.dogbot = {
+    url:'assets/models/dogbot.glb', targetH:1.75, yaw:0,
+    prep:function(root){
+      root.traverse(function(o){ if(o.isMesh){
+        if(o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+        o.material=new THREE.MeshStandardMaterial({color:0x2b3239,metalness:0.82,roughness:0.38,envMapIntensity:1.0});
+      }});
+    },
+    dress:function(g,team){
+      var col=(window.TEAM_COL?TEAM_COL[team]:(team?0xff5148:0x37e0cf));
+      var box=new THREE.Box3().setFromObject(g), s=new THREE.Vector3(); box.getSize(s);
+      var w=s.x,h=s.y,d=s.z,topY=box.max.y,frontZ=box.max.z;
+      var metal=new THREE.MeshStandardMaterial({color:0x20252b,metalness:0.85,roughness:0.34,envMapIntensity:1.0});
+      var glow=new THREE.MeshStandardMaterial({color:0x0a0a0a,emissive:new THREE.Color(col),emissiveIntensity:2.3,metalness:0.2,roughness:0.5});
+      var wep=new THREE.Group();
+      var mount=new THREE.Mesh(new THREE.BoxGeometry(w*0.38,h*0.16,d*0.32),metal); mount.castShadow=true; wep.add(mount);
+      var bl=d*0.55;
+      var barrel=new THREE.Mesh(new THREE.CylinderGeometry(w*0.05,w*0.058,bl,12),metal);
+      barrel.rotation.x=Math.PI/2; barrel.position.set(0,h*0.015,d*0.24+bl*0.5); barrel.castShadow=true; wep.add(barrel);
+      var muzzle=new THREE.Mesh(new THREE.CylinderGeometry(w*0.078,w*0.078,h*0.05,12),glow);
+      muzzle.rotation.x=Math.PI/2; muzzle.position.set(0,h*0.015,d*0.24+bl); wep.add(muzzle);
+      wep.position.set(0,topY*0.86,0); g.add(wep);
+      var eye=new THREE.Mesh(new THREE.SphereGeometry(Math.max(w,0.2)*0.11,12,10),glow);
+      eye.position.set(0,topY*0.8,frontZ*0.72); g.add(eye);
+    }
+  };
   MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, yaw:0 };
   MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, yaw:0 };
 
