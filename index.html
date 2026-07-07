@@ -6,18 +6,60 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="DUSK">
   <meta name="theme-color" content="#0d0a16">
-  <meta http-equiv="refresh" content="0; url=./dusk_index_fixed.html">
-  <title>DUSK stable</title>
+  <title>DUSK air/drone restore</title>
   <style>
-    html,body{margin:0;height:100%;background:#0d0a16;color:#e9dfcf;font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;text-align:center;padding:24px}
+    html,body{margin:0;height:100%;background:#0d0a16;color:#e9dfcf;font-family:system-ui,-apple-system,sans-serif;overflow:hidden;touch-action:manipulation}
+    #boot{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;z-index:9999;background:#0d0a16}
     a{color:#ffb454;font-weight:700}
   </style>
 </head>
 <body>
-  <main>
-    <h1>DUSK</h1>
-    <p>Restoring stable playable build…</p>
-    <p><a href="./dusk_index_fixed.html">Open stable game</a></p>
-  </main>
+  <div id="boot"><main><h1>DUSK</h1><p>Loading air/drone build…</p><p><a href="./dusk_index_fixed.html">Open stable fallback</a></p></main></div>
+  <script>
+    (async function(){
+      const boot=document.getElementById('boot');
+      const bust='r='+Date.now();
+      function showError(err){
+        console.error(err);
+        boot.innerHTML='<main><h1>DUSK</h1><p>Patch load failed. Stable build is still available.</p><p><a href="./dusk_index_fixed.html">Open stable fallback</a></p></main>';
+      }
+      function appendScript(src,label){
+        return new Promise((resolve,reject)=>{
+          const s=document.createElement('script');
+          s.src=src;
+          s.onload=resolve;
+          s.onerror=()=>reject(new Error(label+' failed'));
+          document.body.appendChild(s);
+        });
+      }
+      try{
+        const html=await fetch('./dusk_index_fixed.html?'+bust,{cache:'no-store'}).then(r=>{
+          if(!r.ok)throw new Error('stable HTML failed '+r.status);
+          return r.text();
+        });
+        const doc=new DOMParser().parseFromString(html,'text/html');
+        const baseScripts=[...doc.querySelectorAll('script')].map((s,i)=>({src:s.getAttribute('src'),text:s.textContent,label:s.id||s.getAttribute('src')||('base script '+i)}));
+        doc.querySelectorAll('script').forEach(s=>s.remove());
+        document.documentElement.className=doc.documentElement.className||'';
+        document.head.innerHTML=doc.head.innerHTML;
+        document.body.innerHTML=doc.body.innerHTML;
+        for(const spec of baseScripts){
+          await new Promise((resolve,reject)=>{
+            const s=document.createElement('script');
+            if(spec.src){s.src=spec.src;s.onload=resolve;s.onerror=()=>reject(new Error(spec.label+' failed'));}
+            else{s.textContent=spec.text;}
+            document.body.appendChild(s);
+            if(!spec.src)setTimeout(resolve,0);
+          });
+        }
+        await appendScript('./v02_patch.js?'+bust,'air/drone patch');
+        const badge=document.createElement('div');
+        badge.textContent='air/drone build loaded';
+        badge.style.cssText='position:fixed;left:10px;top:30px;z-index:99999;background:rgba(13,10,22,.9);border:1px solid rgba(55,224,207,.45);color:#37e0cf;padding:5px 8px;font:10px system-ui;letter-spacing:.1em;text-transform:uppercase;pointer-events:none';
+        document.body.appendChild(badge);
+        setTimeout(()=>badge.remove(),4000);
+      }catch(err){showError(err);}
+    })();
+  </script>
 </body>
 </html>
