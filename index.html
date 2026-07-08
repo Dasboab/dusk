@@ -227,7 +227,8 @@ const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in wi
 const HALF = 210;                  // world spans -210..210 (expansive open field)
 const SHORE = 148;                 // base eastern shoreline x
 let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
-(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0)||1 : 0;
+(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
+  try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
   if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
@@ -3529,6 +3530,186 @@ aiTick=function(dt){
   MODELS.droneugv  = { url:'assets/models/droneugv.glb',  targetH:2.2, yaw:0 };  /* Robot Enemy, ground drone */
 
   if(Object.keys(MODELS).length) window.__loadModels();
+})();
+
+/* ============================================================
+   v05i_net.js  -  Dusk multiplayer client (lobby + seed handshake)
+   Connects to the dusk-mp worker (Durable Object rooms). Opt-in:
+   nothing runs until the player opens the lobby or the URL carries
+   ?mp=CODE, so single-player is completely unaffected.
+
+   Set the worker URL once after deploying dusk-mp:
+     window.DUSK_MP_URL = 'https://dusk-mp.<subdomain>.workers.dev';
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.DuskNet) return;
+
+  var CFG = (window.DUSK_MP_URL || '').replace(/\/+$/, '');
+  function httpBase() { return CFG; }
+  function wsBase() { return CFG.replace(/^http/, 'ws'); }
+
+  var Net = {
+    active: false, ws: null, role: null, slot: -1, host: -1,
+    seed: null, code: null, max: 2, players: [], name: 'Cmdr',
+    onSnap: null, onEv: null,           // set by the sim layer later
+  };
+  window.DuskNet = Net;
+
+  /* ---- tiny DOM helpers ---- */
+  function el(tag, css, txt) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e; }
+  function post(path, body) {
+    return fetch(httpBase() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) { return r.json(); });
+  }
+
+  /* ---- overlay UI ---- */
+  var ui = {};
+  function buildUI() {
+    var wrap = el('div', 'position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;background:rgba(8,6,14,.72);font-family:system-ui,Segoe UI,Roboto,sans-serif;');
+    var panel = el('div', 'width:min(520px,92vw);background:#181026;border:1px solid #37e0cf55;border-radius:14px;padding:20px 22px;color:#e7e2f0;box-shadow:0 18px 60px #000a;');
+    panel.appendChild(el('div', 'font-size:20px;font-weight:700;letter-spacing:.5px;color:#37e0cf;margin-bottom:2px;', 'DUSK  Multiplayer'));
+    ui.sub = el('div', 'font-size:12px;color:#a99fc0;margin-bottom:14px;', 'Create a room or join with a code.');
+    panel.appendChild(ui.sub);
+
+    var row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;');
+    ui.nameIn = el('input'); ui.nameIn.value = Net.name; ui.nameIn.placeholder = 'Callsign';
+    ui.nameIn.style.cssText = 'flex:1 1 130px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
+    ui.maxSel = el('select'); [2, 3, 4].forEach(function (n) { var o = el('option', '', n + ' players'); o.value = n; ui.maxSel.appendChild(o); });
+    ui.maxSel.style.cssText = 'padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
+    row.appendChild(ui.nameIn); row.appendChild(ui.maxSel); panel.appendChild(row);
+
+    var row2 = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;');
+    ui.create = btn('Create room', '#37e0cf', '#04241f');
+    ui.codeIn = el('input'); ui.codeIn.placeholder = 'CODE'; ui.codeIn.maxLength = 6;
+    ui.codeIn.style.cssText = 'width:96px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;text-transform:uppercase;letter-spacing:2px;';
+    ui.join = btn('Join', '#ffb44a', '#2a1600');
+    row2.appendChild(ui.create); row2.appendChild(ui.codeIn); row2.appendChild(ui.join); panel.appendChild(row2);
+
+    ui.list = el('div', 'min-height:70px;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:10px;');
+    panel.appendChild(ui.list);
+
+    ui.chatLog = el('div', 'height:78px;overflow:auto;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:6px 9px;font-size:12px;color:#c9c2dc;margin-bottom:8px;display:none;');
+    panel.appendChild(ui.chatLog);
+    ui.chatIn = el('input'); ui.chatIn.placeholder = 'Message (Enter)';
+    ui.chatIn.style.cssText = 'width:100%;padding:8px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;margin-bottom:12px;display:none;';
+
+    panel.appendChild(ui.chatIn);
+
+    var foot = el('div', 'display:flex;gap:8px;justify-content:flex-end;');
+    ui.ready = btn('Ready', '#8f7bd6', '#160a26'); ui.ready.style.display = 'none';
+    ui.start = btn('Start match', '#37e0cf', '#04241f'); ui.start.style.display = 'none';
+    ui.close = btn('Close', '#3a3350', '#fff');
+    foot.appendChild(ui.ready); foot.appendChild(ui.start); foot.appendChild(ui.close);
+    panel.appendChild(foot);
+
+    wrap.appendChild(panel); document.body.appendChild(wrap); ui.wrap = wrap;
+
+    ui.create.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; createRoom(+ui.maxSel.value); };
+    ui.join.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; var c = ui.codeIn.value.trim().toUpperCase(); if (c) joinRoom(c); };
+    ui.close.onclick = function () { wrap.style.display = 'none'; };
+    ui.ready.onclick = function () { Net._ready = !Net._ready; ui.ready.textContent = Net._ready ? 'Not ready' : 'Ready'; sendMsg({ type: 'ready', ready: Net._ready, name: Net.name, faction: Net.slot }); };
+    ui.start.onclick = function () { sendMsg({ type: 'start' }); };
+    ui.chatIn.onkeydown = function (e) { if (e.key === 'Enter' && ui.chatIn.value.trim()) { sendMsg({ type: 'chat', text: ui.chatIn.value }); ui.chatIn.value = ''; } };
+  }
+  function btn(txt, bg, fg) { var b = el('button', 'padding:9px 14px;border:none;border-radius:8px;background:' + bg + ';color:' + fg + ';font-weight:600;cursor:pointer;', txt); return b; }
+
+  function openLobby() { if (!CFG) { alert('Multiplayer is not configured yet.\nDeploy the dusk-mp worker, then set window.DUSK_MP_URL.'); return; } if (!ui.wrap) buildUI(); ui.wrap.style.display = 'flex'; }
+  Net.openLobby = openLobby;
+
+  /* ---- lobby / connection ---- */
+  function createRoom(max) {
+    ui.sub.textContent = 'Creating room...';
+    post('/room', { max: max }).then(function (r) {
+      if (!r || !r.code) { ui.sub.textContent = 'Could not create room.'; return; }
+      connect(r.code, r.seed, max, true);
+    }).catch(function () { ui.sub.textContent = 'Network error. Check DUSK_MP_URL.'; });
+  }
+  function joinRoom(code) { ui.sub.textContent = 'Joining ' + code + '...'; connect(code, null, null, false); }
+
+  function connect(code, seed, max, asCreator) {
+    if (Net.ws) try { Net.ws.close(); } catch (e) {}
+    var q = '?room=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(Net.name);
+    if (seed != null) q += '&seed=' + (seed >>> 0);
+    if (max) q += '&max=' + max;
+    var ws = new WebSocket(wsBase() + '/ws' + q);
+    Net.ws = ws; Net.code = code;
+    ws.onopen = function () { if (ui.sub) ui.sub.textContent = 'Connected to ' + code + '.'; };
+    ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } handle(m); };
+    ws.onclose = function () { if (Net.active) banner('Disconnected from room.'); else if (ui.sub) ui.sub.textContent = 'Connection closed.'; };
+    ws.onerror = function () { if (ui.sub) ui.sub.textContent = 'Connection error.'; };
+  }
+  function sendMsg(o) { try { Net.ws && Net.ws.readyState === 1 && Net.ws.send(JSON.stringify(o)); } catch (e) {} }
+  Net.send = sendMsg;
+
+  function handle(m) {
+    switch (m.type) {
+      case 'welcome':
+        Net.slot = m.you; Net.host = m.host; Net.seed = m.seed; Net.code = m.code; Net.max = m.max;
+        Net.role = (m.you === m.host) ? 'host' : 'client'; Net.players = m.players || [];
+        renderLobby(); showLobbyControls(); break;
+      case 'lobby': Net.players = m.players || []; Net.host = m.host; renderLobby(); showLobbyControls(); break;
+      case 'start': beginMatch(m.seed); break;
+      case 'chat': chatLine((m.name || ('P' + m.from)) + ': ' + m.text); break;
+      case 'leave': chatLine('slot ' + m.slot + ' left'); break;
+      case 'host_left': banner('Host left. Match ended.'); break;
+      case 'order': if (Net.onOrder) Net.onOrder(m.from, m.order); break;
+      case 'snap': if (Net.onSnap) Net.onSnap(m); break;
+      case 'ev': if (Net.onEv) Net.onEv(m.ev); break;
+      case 'error': if (ui.sub) ui.sub.textContent = 'Room error: ' + m.reason; break;
+    }
+  }
+
+  function renderLobby() {
+    if (!ui.list) return;
+    ui.list.innerHTML = '';
+    ui.list.appendChild(el('div', 'color:#37e0cf;font-weight:600;margin-bottom:4px;', 'Room ' + (Net.code || '') + '  (' + Net.players.length + '/' + Net.max + ')'));
+    Net.players.forEach(function (p) {
+      var line = (p.host ? 'HOST ' : '     ') + '[' + p.slot + '] ' + p.name + (p.ready ? '  ready' : '');
+      ui.list.appendChild(el('div', 'color:' + (p.slot === Net.slot ? '#fff' : '#b9b1d0') + ';', line));
+    });
+  }
+  function showLobbyControls() {
+    if (!ui.ready) return;
+    ui.chatLog.style.display = ui.chatIn.style.display = 'block';
+    ui.ready.style.display = 'inline-block';
+    ui.start.style.display = (Net.role === 'host') ? 'inline-block' : 'none';
+    ui.sub.textContent = (Net.role === 'host') ? 'You are host. Start when ready.' : 'Waiting for host to start.';
+  }
+  function chatLine(t) { if (!ui.chatLog) return; var d = el('div', '', t); ui.chatLog.appendChild(d); ui.chatLog.scrollTop = ui.chatLog.scrollHeight; }
+
+  /* ---- match handshake: reload into the shared seeded world ---- */
+  function beginMatch(seed) {
+    var host = (Net.role === 'host') ? 1 : 0;
+    var url = location.pathname + '?seed=' + (seed >>> 0) + '&mp=' + encodeURIComponent(Net.code) + '&slot=' + Net.slot + '&host=' + host;
+    location.href = url; // head seed reader rebuilds identical terrain; we auto-reconnect on load
+  }
+
+  function banner(txt) {
+    var b = document.getElementById('dusk-mp-banner') || el('div', 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9500;background:#181026cc;border:1px solid #37e0cf55;color:#cfeee9;padding:6px 12px;border-radius:8px;font:600 12px system-ui;');
+    b.id = 'dusk-mp-banner'; b.textContent = txt; if (!b.parentNode) document.body.appendChild(b);
+  }
+
+  /* ---- launcher button + auto-reconnect ---- */
+  function addLauncher() {
+    if (document.getElementById('dusk-mp-btn')) return;
+    var b = el('button', 'position:fixed;top:10px;right:12px;z-index:8000;padding:8px 12px;border:1px solid #37e0cf66;border-radius:8px;background:#181026cc;color:#37e0cf;font:600 12px system-ui;cursor:pointer;', 'Multiplayer');
+    b.id = 'dusk-mp-btn'; b.onclick = openLobby; document.body.appendChild(b);
+  }
+
+  function autoReconnect() {
+    var q; try { q = new URLSearchParams(location.search); } catch (e) { return; }
+    var code = q.get('mp'); if (!code) return;
+    Net.active = true; Net.slot = +(q.get('slot') || 0); Net.role = (q.get('host') === '1') ? 'host' : 'client';
+    Net.seed = (q.get('seed') >>> 0);
+    banner('MP room ' + code.toUpperCase() + '  slot ' + Net.slot + '  (' + Net.role + ')');
+    if (CFG) connect(code.toUpperCase(), Net.seed, null, false);
+    // NOTE: live battle sync (orders in, snapshots out) attaches here via
+    // Net.onOrder / Net.onSnap / Net.sendOrder once validated against the
+    // deployed worker. Presence, chat and the shared seeded map work now.
+  }
+
+  function boot() { addLauncher(); autoReconnect(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 
 /* ============================ START / END ============================ */

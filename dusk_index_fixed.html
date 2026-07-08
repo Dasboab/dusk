@@ -216,7 +216,8 @@ const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in wi
 const HALF = 210;                  // world spans -210..210 (expansive open field)
 const SHORE = 148;                 // base eastern shoreline x
 let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
-(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0)||1 : 0;
+(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
+  try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
   if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
