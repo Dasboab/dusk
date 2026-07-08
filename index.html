@@ -3545,7 +3545,7 @@ aiTick=function(dt){
   'use strict';
   if (window.DuskNet) return;
 
-  var CFG = (window.DUSK_MP_URL || '').replace(/\/+$/, '');
+  var CFG = (window.DUSK_MP_URL || 'https://dusk-mp.rasykes1992.workers.dev').replace(/\/+$/, '');
   function httpBase() { return CFG; }
   function wsBase() { return CFG.replace(/^http/, 'ws'); }
 
