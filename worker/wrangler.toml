@@ -1,0 +1,20 @@
+name = "dusk-mp"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Durable Object that backs each game room.
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "GameRoom"
+
+# SQLite-backed DO class: works on the Workers free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+# Optional: public lobby listing. Create a KV namespace and paste its id
+# here, then uncomment. Join-by-code works without it.
+# [[kv_namespaces]]
+# binding = "LOBBY"
+# id = "<kv-namespace-id>"
