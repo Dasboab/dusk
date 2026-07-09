@@ -3463,25 +3463,77 @@ aiTick=function(dt){
   var DEFAULT_ENV=0.18;
 
   /* painted team colour that multiplies the baked AO in COLOR_0 */
-  function tintAO(g,team,env){
+  var PAINT={};
+  function hash3(x,y,z){var s=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453;return s-Math.floor(s);}
+  function tintAO(g,team,spec){
+    spec=spec||{};
     var TC=(typeof TEAM_COL!=='undefined'&&TEAM_COL)?TEAM_COL:null;
     var raw=TC?TC[team]:(team?0xff5148:0x37e0cf);
-    var col=new THREE.Color(raw); var hsl={}; col.getHSL(hsl);
+    var base=new THREE.Color(raw),hsl={};base.getHSL(hsl);
     /* lift saturation so even muted team colours read as painted, keep a mid value */
-    var s=Math.min(0.82, hsl.s*1.8+0.30);
-    var l=Math.min(0.55, Math.max(0.42, hsl.l));
-    col.setHSL(hsl.h, s, l);
-    var e=(env==null?DEFAULT_ENV:env);
-    g.traverse(function(o){ if(o.isMesh){
+    base.setHSL(hsl.h, Math.min(0.82,hsl.s*1.8+0.30), Math.min(0.55,Math.max(0.42,hsl.l)));
+    var alt=base.clone(); alt.getHSL(hsl); alt.setHSL((hsl.h+0.05)%1, hsl.s*0.9, hsl.l*0.62);
+    var dark=new THREE.Color(0x3d3a30).lerp(base,0.25);
+    var rubber=new THREE.Color(0x1d1f23);
+    var e=(spec.env==null?DEFAULT_ENV:spec.env);
+    var isB=!!spec.build;
+    g.traverse(function(o){ if(!o.isMesh)return;
       if(o.geometry&&!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-      var hasCol=!!(o.geometry&&o.geometry.attributes.color);
-      o.material=new THREE.MeshStandardMaterial({color:col.clone(),vertexColors:hasCol,
-        metalness:0.10,roughness:0.60,envMapIntensity:e});
+      var key=o.geometry.uuid+'|'+team+'|'+(isB?'b':'u');
+      if(PAINT[key]){ o.geometry=PAINT[key]; }
+      else{
+        var geo=o.geometry.clone();      /* per-team paint; template stays pristine */
+        var P=geo.attributes.position,N=geo.attributes.normal,A=geo.attributes.color;
+        geo.computeBoundingBox(); var bb=geo.boundingBox;
+        var H=(bb.max.y-bb.min.y)||1;
+        var maxD=Math.max(bb.max.x-bb.min.x,H,bb.max.z-bb.min.z)||1;
+        var f=(isB?4.5:5.5)/maxD, wheelY=bb.min.y+H*0.16;
+        var out=new Float32Array(P.count*3), c=new THREE.Color();
+        for(var i=0;i<P.count;i++){
+          var x=P.getX(i),y=P.getY(i),z=P.getZ(i);
+          var ao=A?A.getX(i):1;
+          if(!isB && y<wheelY){ c.copy(rubber); }         /* wheels, tracks, boots */
+          else{
+            var n=hash3(Math.floor(x*f),Math.floor(y*f),Math.floor(z*f));
+            c.copy(n>0.60?alt:(n<0.13?dark:base));        /* blocky camo patches */
+            if(N.getY(i)>0.72) c.multiplyScalar(1.10);    /* sunlit top surfaces */
+          }
+          out[i*3]=c.r*ao; out[i*3+1]=c.g*ao; out[i*3+2]=c.b*ao;
+        }
+        geo.setAttribute('color',new THREE.BufferAttribute(out,3));
+        PAINT[key]=geo; o.geometry=geo;
+      }
+      o.material=new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,
+        metalness:0.06,roughness:0.85,envMapIntensity:e});
       o.castShadow=true; o.receiveShadow=true; o.userData.__gltf=true;
-    }});
+    });
   }
   window.__tintAO = tintAO;
   window.__isGltfType = function(t){ return !!(window.MODELS && window.MODELS[t]); };
+
+  /* soft contact shadow so units sit on the ground instead of floating */
+  var _blobTex=null;
+  function blobTex(){
+    if(_blobTex)return _blobTex;
+    var c=document.createElement('canvas');c.width=c.height=64;
+    var x=c.getContext('2d');
+    var grd=x.createRadialGradient(32,32,4,32,32,31);
+    grd.addColorStop(0,'rgba(255,255,255,0.85)');
+    grd.addColorStop(0.65,'rgba(255,255,255,0.45)');
+    grd.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=grd;x.fillRect(0,0,64,64);
+    _blobTex=new THREE.CanvasTexture(c);return _blobTex;
+  }
+  function addBlob(g,inst,type){
+    var def=(window.UDEF&&UDEF[type])||{};
+    if(def.domain==='sea'||def.domain==='air')return;
+    var bb=new THREE.Box3().setFromObject(inst), s=new THREE.Vector3(); bb.getSize(s);
+    var r=Math.max(s.x,s.z)*0.62;
+    var m=new THREE.Mesh(new THREE.PlaneGeometry(r*2,r*2),
+      new THREE.MeshBasicMaterial({map:blobTex(),color:0x000000,transparent:true,
+        opacity:0.4,depthWrite:false}));
+    m.rotation.x=-Math.PI/2; m.position.y=0.06; m.renderOrder=1; g.add(m);
+  }
 
   function normalise(root, spec, type){
     let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
@@ -3526,8 +3578,9 @@ aiTick=function(dt){
     normalise(inst,spec,type);
     const g=new THREE.Group(); g.add(inst);
     if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
-    g.userData.gltf=true;
-    if(spec.dress){try{spec.dress(g,team);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
+    g.userData.gltf=true; g.userData.inst=inst;
+    if(spec.dress){try{spec.dress(g,team,spec);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
+    addBlob(g,inst,type);
     return g;
   };
 
@@ -3538,8 +3591,8 @@ aiTick=function(dt){
     if(!hit||!spec||!spec.build) return _mkBld(type,team);
     const inst=hit.tmpl.clone(true);
     normalise(inst,spec,type);
-    const g=new THREE.Group(); g.add(inst); g.userData.gltf=true;
-    if(spec.dress){try{spec.dress(g,team);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
+    const g=new THREE.Group(); g.add(inst); g.userData.gltf=true; g.userData.inst=inst;
+    if(spec.dress){try{spec.dress(g,team,spec);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
     return g;
   };
 
@@ -3747,6 +3800,78 @@ aiTick=function(dt){
   function boot() { addLauncher(); autoReconnect(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
+
+/* ==================== V0.5j POLISH ==================== */
+/* (1) Fog of war is multiplied straight into the terrain shader. The old
+      approach was a second terrain-shaped plane hovering 0.35 above the
+      ground; terrain bumps poked through it and read as pale floating
+      squares. With the fog sampled inside the ground material there is no
+      second surface, so the artefact cannot exist.
+   (2) Movement animation for GLTF units: infantry get a walk bob, sway and
+      forward lean; ground vehicles get suspension jitter. Boats already
+      bob in the core loop.                                               */
+(function(){
+
+  /* ---- 1. fog into terrain ---- */
+  function fogToTerrain(){
+    let fogMesh=null;
+    scene.traverse(n=>{ if(n.isMesh&&n.renderOrder===5&&n.material&&n.material.map) fogMesh=n; });
+    if(!fogMesh||fogMesh.userData._sunk) return;
+    const fogTex=fogMesh.material.map;
+    let terrain=null,best=0;
+    scene.children.forEach(n=>{
+      if(n!==fogMesh&&n.isMesh&&n.geometry&&n.geometry.type==='PlaneGeometry'&&
+         n.material&&n.material.isMeshStandardMaterial){
+        const p=n.geometry.parameters||{}, a=(p.width||0)*(p.height||0);
+        if(a>best){best=a;terrain=n;}
+      }
+    });
+    if(!terrain) return;
+    fogMesh.visible=false; fogMesh.userData._sunk=true;
+    const mat=terrain.material;
+    mat.onBeforeCompile=function(sh){
+      sh.uniforms.uFow={value:fogTex};
+      sh.vertexShader='varying vec2 vFowUv;\n'+sh.vertexShader
+        .replace('#include <uv_vertex>','#include <uv_vertex>\n\tvFowUv=uv;');
+      sh.fragmentShader='varying vec2 vFowUv;\nuniform sampler2D uFow;\n'+sh.fragmentShader
+        .replace('#include <dithering_fragment>',
+          '#include <dithering_fragment>\n\tvec4 fowC=texture2D(uFow,vFowUv);\n'+
+          '\tgl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(0.016,0.013,0.035),fowC.a);');
+    };
+    mat.needsUpdate=true;
+  }
+  fogToTerrain();
+  const _bw=buildWorld; buildWorld=function(){ _bw(); fogToTerrain(); };
+
+  /* ---- 2. unit motion ---- */
+  let lastT=performance.now();
+  function motion(){
+    requestAnimationFrame(motion);
+    const now=performance.now(), dt=Math.min(0.1,(now-lastT)/1000)||0.016; lastT=now;
+    if(!window.G||!G.ents)return;
+    for(const e of G.ents){
+      const m=e.mesh; if(!m||!m.userData||!m.userData.gltf)continue;
+      const inst=m.userData.inst; if(!inst)continue;
+      const def=e.def||{};
+      if(def.speed==null||def.domain==='sea'||def.domain==='air')continue;
+      const ax=(e._ax==null?e.pos.x:e._ax), az=(e._az==null?e.pos.z:e._az);
+      const sp=Math.hypot(e.pos.x-ax,e.pos.z-az)/dt;
+      e._ax=e.pos.x; e._az=e.pos.z;
+      const moving=sp>0.4&&!e.dead;
+      e._wt=(e._wt==null?Math.random()*6:e._wt)+dt*(moving?Math.min(sp,12):0);
+      if(def.armor==='inf'){
+        inst.position.y=moving?Math.abs(Math.sin(e._wt*7.5))*0.10:0;
+        inst.rotation.z=moving?Math.sin(e._wt*7.5)*0.055:0;
+        inst.rotation.x=moving?0.07:0;
+      }else{
+        inst.position.y=moving?Math.abs(Math.sin(e._wt*11))*0.035:0;
+        inst.rotation.z=moving?Math.sin(e._wt*5.5)*0.014:0;
+      }
+    }
+  }
+  motion();
+})();
+/* ==================== END V0.5j ==================== */
 
 /* ============================ START / END ============================ */
 function endGame(win){
