@@ -3195,6 +3195,7 @@ aiTick=function(dt){
     if(!root||!root.traverse)return;
     root.traverse(n=>{
       if(!n.isMesh||!n.material)return;
+      if(n.userData&&n.userData.__gltf)return;   // leave GLTF model materials untouched
       if(Array.isArray(n.material))n.material.forEach(militariseMat); else militariseMat(n.material);
       // muddy the ground
       if(n.geometry&&n.geometry.type==='PlaneGeometry'){
@@ -3217,6 +3218,8 @@ aiTick=function(dt){
     b.position.set(x,y,z);b.castShadow=true;g.add(b);return b;}
   function greeble(mesh,type,def,isB){
     if(!mesh)return;
+    if(window.__isGltfType&&window.__isGltfType(type))return;  // GLTF models carry their own detail
+
     /* Measure the structural hull in the mesh's OWN local frame, ignoring the
        selection ring, the health-bar sprite, world rotation and thin masts.
        Then bolt detail onto the real DECK (top of the main body, not the overall
@@ -3474,10 +3477,11 @@ aiTick=function(dt){
       var hasCol=!!(o.geometry&&o.geometry.attributes.color);
       o.material=new THREE.MeshStandardMaterial({color:col.clone(),vertexColors:hasCol,
         metalness:0.10,roughness:0.60,envMapIntensity:e});
-      o.castShadow=true; o.receiveShadow=true;
+      o.castShadow=true; o.receiveShadow=true; o.userData.__gltf=true;
     }});
   }
   window.__tintAO = tintAO;
+  window.__isGltfType = function(t){ return !!(window.MODELS && window.MODELS[t]); };
 
   function normalise(root, spec, type){
     let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
