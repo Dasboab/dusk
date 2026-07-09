@@ -3484,6 +3484,13 @@ aiTick=function(dt){
       else{
         var geo=o.geometry.clone();      /* per-team paint; template stays pristine */
         var P=geo.attributes.position,N=geo.attributes.normal,A=geo.attributes.color;
+        /* r128 getX returns raw stored values: denormalise byte/short AO */
+        var aoDiv=1;
+        if(A){var ar=A.array;
+          if(ar instanceof Uint8Array||ar instanceof Uint8ClampedArray)aoDiv=255;
+          else if(ar instanceof Uint16Array)aoDiv=65535;
+          else if(ar instanceof Int8Array)aoDiv=127;
+          else if(ar instanceof Int16Array)aoDiv=32767;}
         geo.computeBoundingBox(); var bb=geo.boundingBox;
         var H=(bb.max.y-bb.min.y)||1;
         var maxD=Math.max(bb.max.x-bb.min.x,H,bb.max.z-bb.min.z)||1;
@@ -3491,7 +3498,7 @@ aiTick=function(dt){
         var out=new Float32Array(P.count*3), c=new THREE.Color();
         for(var i=0;i<P.count;i++){
           var x=P.getX(i),y=P.getY(i),z=P.getZ(i);
-          var ao=A?A.getX(i):1;
+          var ao=A?Math.min(1,A.getX(i)/aoDiv):1;
           if(!isB && y<wheelY){ c.copy(rubber); }         /* wheels, tracks, boots */
           else{
             var n=hash3(Math.floor(x*f),Math.floor(y*f),Math.floor(z*f));
@@ -3844,11 +3851,8 @@ aiTick=function(dt){
   const _bw=buildWorld; buildWorld=function(){ _bw(); fogToTerrain(); };
 
   /* ---- 2. unit motion ---- */
-  let lastT=performance.now();
-  function motion(){
-    requestAnimationFrame(motion);
-    const now=performance.now(), dt=Math.min(0.1,(now-lastT)/1000)||0.016; lastT=now;
-    if(!window.G||!G.ents)return;
+  function motionStep(dt){
+    if(typeof G==='undefined'||!G||!G.ents)return;
     for(const e of G.ents){
       const m=e.mesh; if(!m||!m.userData||!m.userData.gltf)continue;
       const inst=m.userData.inst; if(!inst)continue;
@@ -3858,16 +3862,25 @@ aiTick=function(dt){
       const sp=Math.hypot(e.pos.x-ax,e.pos.z-az)/dt;
       e._ax=e.pos.x; e._az=e.pos.z;
       const moving=sp>0.4&&!e.dead;
+      if(e._by==null)e._by=inst.position.y;          /* normalise() ground offset */
       e._wt=(e._wt==null?Math.random()*6:e._wt)+dt*(moving?Math.min(sp,12):0);
       if(def.armor==='inf'){
-        inst.position.y=moving?Math.abs(Math.sin(e._wt*7.5))*0.10:0;
-        inst.rotation.z=moving?Math.sin(e._wt*7.5)*0.055:0;
-        inst.rotation.x=moving?0.07:0;
+        inst.position.y=e._by+(moving?Math.abs(Math.sin(e._wt*7.5))*0.11:0);
+        inst.rotation.z=moving?Math.sin(e._wt*7.5)*0.06:0;
+        inst.rotation.x=moving?0.08:0;
       }else{
-        inst.position.y=moving?Math.abs(Math.sin(e._wt*11))*0.035:0;
-        inst.rotation.z=moving?Math.sin(e._wt*5.5)*0.014:0;
+        inst.position.y=e._by+(moving?Math.abs(Math.sin(e._wt*11))*0.05:0);
+        inst.rotation.z=moving?Math.sin(e._wt*5.5)*0.018:0;
+        inst.rotation.x=moving?Math.sin(e._wt*7)*0.012:0;
       }
     }
+  }
+  window.__motionStep=motionStep;
+  let lastT=performance.now();
+  function motion(){
+    requestAnimationFrame(motion);
+    const now=performance.now(), dt=Math.min(0.1,(now-lastT)/1000)||0.016; lastT=now;
+    motionStep(dt);
   }
   motion();
 })();
