@@ -3456,15 +3456,24 @@ aiTick=function(dt){
 
   function isSkinned(o){let s=false;o.traverse(m=>{if(m.isSkinnedMesh)s=true;});return s;}
 
-  /* muted team tint that multiplies the baked AO in COLOR_0 */
+  /* low env so the environment map does not wash the albedo to grey */
+  var DEFAULT_ENV=0.18;
+
+  /* painted team colour that multiplies the baked AO in COLOR_0 */
   function tintAO(g,team,env){
-    var base=new THREE.Color((window.TEAM_COL?TEAM_COL[team]:(team?0xff5148:0x37e0cf)));
-    base.lerp(new THREE.Color(0x9098a4),0.45);
+    var TC=(typeof TEAM_COL!=='undefined'&&TEAM_COL)?TEAM_COL:null;
+    var raw=TC?TC[team]:(team?0xff5148:0x37e0cf);
+    var col=new THREE.Color(raw); var hsl={}; col.getHSL(hsl);
+    /* lift saturation so even muted team colours read as painted, keep a mid value */
+    var s=Math.min(0.82, hsl.s*1.8+0.30);
+    var l=Math.min(0.55, Math.max(0.42, hsl.l));
+    col.setHSL(hsl.h, s, l);
+    var e=(env==null?DEFAULT_ENV:env);
     g.traverse(function(o){ if(o.isMesh){
       if(o.geometry&&!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
       var hasCol=!!(o.geometry&&o.geometry.attributes.color);
-      o.material=new THREE.MeshStandardMaterial({color:base.clone(),vertexColors:hasCol,
-        metalness:0.15,roughness:0.72,envMapIntensity:(env==null?1.0:env)});
+      o.material=new THREE.MeshStandardMaterial({color:col.clone(),vertexColors:hasCol,
+        metalness:0.10,roughness:0.60,envMapIntensity:e});
       o.castShadow=true; o.receiveShadow=true;
     }});
   }
@@ -3487,7 +3496,7 @@ aiTick=function(dt){
     if(yaw==null && spec.autoYaw!==false) yaw=(size.x>size.z*1.15)?Math.PI/2:0;
     if(yaw) root.rotation.y=yaw;
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;
-      if(o.material)o.material.envMapIntensity=(spec.env==null?1.0:spec.env);}});
+      if(o.material)o.material.envMapIntensity=(spec.env==null?DEFAULT_ENV:spec.env);}});
     return root;
   }
 
