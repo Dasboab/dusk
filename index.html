@@ -443,8 +443,9 @@ function buildTerrainGeo(){
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
   geo.setAttribute('splat', new THREE.Float32BufferAttribute(spl,4));
   const TL=new THREE.TextureLoader();
-  const ldT=p=>{const t=TL.load(p);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;};
+  const ldT=p=>{const t=TL.load(p);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;};
   const terMat=new THREE.MeshLambertMaterial({vertexColors:true});
+  terMat.customProgramCacheKey=function(){return 'dusk-splat-v2';};
   terMat.onBeforeCompile=(sh)=>{
     sh.uniforms.tGrass={value:ldT('assets/terrain/grass.jpg')};
     sh.uniforms.tDirt ={value:ldT('assets/terrain/dirt.jpg')};
@@ -455,9 +456,13 @@ function buildTerrainGeo(){
     sh.fragmentShader='uniform sampler2D tGrass;\nuniform sampler2D tDirt;\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nvarying vec4 vSplat;\nvarying vec2 tUv;\n'+
       sh.fragmentShader.replace('#include <color_fragment>',
         '#include <color_fragment>\n'+
-        '  vec2 uv1=tUv*44.0;\n'+
-        '  vec3 texc=texture2D(tGrass,uv1).rgb*vSplat.x+texture2D(tDirt,uv1).rgb*vSplat.y+texture2D(tRock,uv1*1.7).rgb*vSplat.z+texture2D(tSand,uv1).rgb*vSplat.w;\n'+
-        '  diffuseColor.rgb=texc*(0.22+diffuseColor.rgb*0.95);');
+        '  vec2 uv1=tUv*34.0;\n'+
+        '  vec3 texc=texture2D(tGrass,uv1).rgb*vSplat.x+texture2D(tDirt,uv1).rgb*vSplat.y+texture2D(tRock,uv1*1.6).rgb*vSplat.z+texture2D(tSand,uv1).rgb*vSplat.w;\n'+
+        '  float det=dot(texture2D(tDirt,tUv*9.0).rgb,vec3(0.333));\n'+
+        '  texc*=(0.58+det*0.85);\n'+
+        '  vec3 tint=diffuseColor.rgb; float tl=dot(tint,vec3(0.333));\n'+
+        '  tint=mix(tint,vec3(tl),0.38);\n'+
+        '  diffuseColor.rgb=texc*(0.24+tint*1.00);');
   };
   const ter=new THREE.Mesh(geo, terMat);
   ter.receiveShadow=true; scene.add(ter);
@@ -527,8 +532,8 @@ let waterTick=null;
 {
   const treeGeo=new THREE.ConeGeometry(1.4,4.6,6);
   const trunkGeo=new THREE.CylinderGeometry(0.28,0.36,1.6,5);
-  const tMat=new THREE.MeshLambertMaterial({color:0x1e3a34});
-  const kMat=new THREE.MeshLambertMaterial({color:0x3a2a28});
+  const tMat=new THREE.MeshLambertMaterial({color:0x2e4a24});
+  const kMat=new THREE.MeshLambertMaterial({color:0x4a3527});
   const N=IS_TOUCH?300:460;
   const tI=new THREE.InstancedMesh(treeGeo,tMat,N), kI=new THREE.InstancedMesh(trunkGeo,kMat,N);
   tI.castShadow=kI.castShadow=true;
@@ -549,7 +554,7 @@ let waterTick=null;
   tI.count=kI.count=n; scene.add(tI); scene.add(kI);
 
   const rockGeo=new THREE.DodecahedronGeometry(1.1,0);
-  const rMat=new THREE.MeshLambertMaterial({color:0x574a5c});
+  const rMat=new THREE.MeshLambertMaterial({color:0x6e675c});
   const R=IS_TOUCH?110:170, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
   rI.castShadow=true; let rn=0; guard=0;
   while(rn<R && guard++<9000){
@@ -562,6 +567,27 @@ let waterTick=null;
     p.set(x,groundH(x,z)+0.3,z); m.compose(p,q,s); rI.setMatrixAt(rn,m); rn++;
   }
   rI.count=rn; scene.add(rI);
+
+  /* grass tufts: cheap ground clutter for detail density */
+  const tuftGeo=new THREE.ConeGeometry(0.30,0.72,4);
+  const tuftMat=new THREE.MeshLambertMaterial({color:0x4d5c2a});
+  const TN=IS_TOUCH?650:1000;
+  const tuI=new THREE.InstancedMesh(tuftGeo,tuftMat,TN);
+  let tn=0; guard=0;
+  while(tn<TN && guard++<26000){
+    const x=rand(-HALF+3,HALF-3), z=rand(-HALF+3,HALF-3);
+    if(x>shoreX(z)-6) continue;
+    const gh=groundH(x,z);
+    if(gh<0.35||gh>6.4) continue;
+    if(vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80)<0.42) continue;
+    let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+1)*(f.r+1)){ok=false;break;} }
+    if(!ok) continue;
+    const sc=rand(0.6,1.5);
+    s.set(sc,sc*rand(0.7,1.3),sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
+    p.set(x,gh+0.3*sc,z); m.compose(p,q,s); tuI.setMatrixAt(tn,m);
+    tn++;
+  }
+  tuI.count=tn; scene.add(tuI);
 }
 
 /* ore fields */
@@ -589,7 +615,7 @@ const fog={
 };
 const exCan=document.createElement('canvas'); exCan.width=exCan.height=FC;
 const exCtx=exCan.getContext('2d');
-exCtx.fillStyle='rgba(64,66,72,0.88)'; exCtx.fillRect(0,0,FC,FC);
+exCtx.fillStyle='rgba(52,54,60,0.93)'; exCtx.fillRect(0,0,FC,FC);
 const fgCan=document.createElement('canvas'); fgCan.width=fgCan.height=FC;
 const fgCtx=fgCan.getContext('2d');
 const fogTex=new THREE.CanvasTexture(fgCan);
@@ -641,7 +667,7 @@ function updateFog(){
   }
   fgCtx.globalCompositeOperation='source-over';
   fgCtx.clearRect(0,0,FC,FC);
-  fgCtx.fillStyle='rgba(92,94,100,0.42)'; fgCtx.fillRect(0,0,FC,FC);
+  fgCtx.fillStyle='rgba(22,24,28,0.30)'; fgCtx.fillRect(0,0,FC,FC);
   fgCtx.drawImage(exCan,0,0);
   for(const e of G.ents){
     if(e.team!==0||e.dead) continue;
