@@ -1,0 +1,32 @@
+<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
+<body style="margin:0;background:#345"><div id=log style="position:fixed;top:0;left:0;color:#0f0;background:#000a;font:11px monospace;padding:4px;z-index:9;white-space:pre-wrap;max-width:100%"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+const L=t=>{document.getElementById('log').textContent+=t+'\n';};
+L(navigator.userAgent.slice(0,80));
+const rn=new THREE.WebGLRenderer({antialias:true});
+rn.setSize(innerWidth,innerHeight);document.body.appendChild(rn.domElement);
+L('maxTex '+rn.capabilities.maxTextureSize+' webgl2 '+rn.capabilities.isWebGL2);
+const sc=new THREE.Scene(); sc.background=new THREE.Color(0x334455);
+const cam=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,100);
+cam.position.set(0,4,9);cam.lookAt(0,1.2,0);
+sc.add(new THREE.AmbientLight(0xffffff,0.7));
+const d=new THREE.DirectionalLight(0xffffff,0.9);d.position.set(4,8,5);sc.add(d);
+const gl=new THREE.GLTFLoader();
+function place(n,x,basic){
+  gl.load(n+'.glb',g=>{
+    const box=new THREE.Box3().setFromObject(g.scene);
+    const s=3/(box.max.y-box.min.y);g.scene.scale.setScalar(s);
+    g.scene.position.set(x,-box.min.y*s,0);
+    if(basic)g.scene.traverse(c=>{if(c.isMesh)c.material=new THREE.MeshBasicMaterial({map:c.material.map});});
+    sc.add(g.scene);
+    setTimeout(()=>{g.scene.traverse(c=>{if(c.isMesh){const m=c.material.map;
+      L(n+(basic?'/basic':'/std')+' map:'+!!m+(m&&m.image?' img:'+(m.image.width||m.image.videoWidth||'?')+'x'+(m.image.height||'?')+' '+(m.image.tagName||m.image.constructor.name):' NO IMAGE'));}});},2500);
+  },undefined,e=>L(n+' LOAD FAIL '+e));
+}
+place('rock_boulder',-3.4,false);place('tree_birch',-1.1,false);
+place('rock_boulder',1.1,true);place('tree_birch',3.4,true);
+setTimeout(()=>L('glErr '+rn.getContext().getError()),3000);
+(function an(){requestAnimationFrame(an);sc.rotation.y+=0.004;rn.render(sc,cam);})();
+</script>
