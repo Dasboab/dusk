@@ -3613,6 +3613,7 @@ aiTick=function(dt){
     const hit=CACHE[type]; const spec=MODELS[type]||{};
     if(!hit||spec.build) return _mkUnit(type,team);
     const inst=(hit.skinned&&THREE.SkeletonUtils)?THREE.SkeletonUtils.clone(hit.tmpl):hit.tmpl.clone(true);
+    if(hit.skinned)inst.traverse(o=>{if(o.isSkinnedMesh)o.frustumCulled=false;});
     normalise(inst,spec,type);
     const g=new THREE.Group(); g.add(inst);
     if(hit.anims&&hit.anims.length)g.userData.anims=hit.anims;
@@ -3636,18 +3637,18 @@ aiTick=function(dt){
   };
 
   /* ===== UNITS (Meshy geometry, decimated, baked AO, team-tinted) ===== */
-  MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO };
+  MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO , yaw:Math.PI };
   MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, dress:tintAO };
   MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, dress:tintAO };
   MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, dress:tintAO };
   MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, dress:tintAO };
-  MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO };
-  MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO };
-  MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO };
+  MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO , yaw:Math.PI };
+  MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO , yaw:Math.PI };
+  MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO , yaw:Math.PI };
   MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, dress:tintAO };
-  MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO };
-  MODELS.rifleman  = { url:'assets/models/rifleman.glb', targetH:1.9, draco:true, dress:tintAO };
-  MODELS.rocketeer = { url:'assets/models/rocketeer.glb', targetH:1.9, draco:true, dress:tintAO };
+  MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO , yaw:Math.PI };
+  MODELS.rifleman  = { url:'assets/models/rifleman.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
+  MODELS.rocketeer = { url:'assets/models/rocketeer.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
 
   /* ===== BUILDINGS (scaled to BDEF footprint) ===== */
   MODELS.conyard   = { url:'assets/models/conyard.glb',   build:true, draco:true, dress:tintAO };
