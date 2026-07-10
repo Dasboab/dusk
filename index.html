@@ -377,8 +377,8 @@ applyCam();
   sunGlow.position.set(-320,55,-760); scene.add(sunGlow);
 }
 
-const hemi=new THREE.HemisphereLight(0x5a4a8a, 0x241a20, 0.75); scene.add(hemi);
-const sun=new THREE.DirectionalLight(0xffb070, 1.15);
+const hemi=new THREE.HemisphereLight(0x7d88b4, 0x3a332c, 0.8); scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xffc890, 1.25);
 sun.position.set(-160,180,-120); sun.castShadow=true;
 sun.shadow.mapSize.set(IS_TOUCH?1024:2048, IS_TOUCH?1024:2048);
 sun.shadow.camera.left=-190; sun.shadow.camera.right=190;
@@ -399,7 +399,7 @@ function buildTerrainGeo(){
 }
 {
   const geo=buildTerrainGeo();
-  const cols=[]; const pos=geo.attributes.position; const nrm=geo.attributes.normal;
+  const cols=[], spl=[]; const pos=geo.attributes.position; const nrm=geo.attributes.normal;
   const C_DEEP=new THREE.Color(0x14384c), C_SHALLOW=new THREE.Color(0x2d7690),
         C_WSAND=new THREE.Color(0x8f7c54), C_SAND=new THREE.Color(0xc2a878),
         C_GRASS=new THREE.Color(0x6b7a3a), C_SCRUB=new THREE.Color(0x8a8146),
@@ -427,9 +427,39 @@ function buildTerrainGeo(){
     if(h>-0.4) c.lerp(tm2.copy(C_CLIFF), sstep(0.34,0.62,slope)*0.9);
     const dith=0.92+vnoise(x*0.5+3,z*0.5+9)*0.13;
     cols.push(c.r*dith, c.g*dith, c.b*dith);
+    /* splat weights: grass, dirt, rock, sand */
+    let wsand=0, wrock=0, wgrass=0, wdirt=0;
+    if(h<-1.2 || (sw>-10 && h<1.0)){ wsand=1; }
+    else{
+      const gm=sstep(0.34,0.55,m);
+      wgrass=gm; wdirt=1-gm;
+      if(m>0.63&&h>1.1){ wgrass=Math.min(1,wgrass+sstep(0.63,0.78,m)*0.5); }
+      wrock=clamp(sstep(3.4,6.0,h)+sstep(0.34,0.62,slope),0,1);
+      const kr=1-wrock; wgrass*=kr; wdirt*=kr;
+    }
+    const wsum=wgrass+wdirt+wrock+wsand||1;
+    spl.push(wgrass/wsum, wdirt/wsum, wrock/wsum, wsand/wsum);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
-  const ter=new THREE.Mesh(geo, new THREE.MeshLambertMaterial({vertexColors:true}));
+  geo.setAttribute('splat', new THREE.Float32BufferAttribute(spl,4));
+  const TL=new THREE.TextureLoader();
+  const ldT=p=>{const t=TL.load(p);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;};
+  const terMat=new THREE.MeshLambertMaterial({vertexColors:true});
+  terMat.onBeforeCompile=(sh)=>{
+    sh.uniforms.tGrass={value:ldT('assets/terrain/grass.jpg')};
+    sh.uniforms.tDirt ={value:ldT('assets/terrain/dirt.jpg')};
+    sh.uniforms.tRock ={value:ldT('assets/terrain/rock.jpg')};
+    sh.uniforms.tSand ={value:ldT('assets/terrain/sand.jpg')};
+    sh.vertexShader='attribute vec4 splat;\nvarying vec4 vSplat;\nvarying vec2 tUv;\n'+
+      sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  vSplat=splat;\n  tUv=uv;');
+    sh.fragmentShader='uniform sampler2D tGrass;\nuniform sampler2D tDirt;\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nvarying vec4 vSplat;\nvarying vec2 tUv;\n'+
+      sh.fragmentShader.replace('#include <color_fragment>',
+        '#include <color_fragment>\n'+
+        '  vec2 uv1=tUv*44.0;\n'+
+        '  vec3 texc=texture2D(tGrass,uv1).rgb*vSplat.x+texture2D(tDirt,uv1).rgb*vSplat.y+texture2D(tRock,uv1*1.7).rgb*vSplat.z+texture2D(tSand,uv1).rgb*vSplat.w;\n'+
+        '  diffuseColor.rgb=texc*(0.22+diffuseColor.rgb*0.95);');
+  };
+  const ter=new THREE.Mesh(geo, terMat);
   ter.receiveShadow=true; scene.add(ter);
 }
 /* eastern sea: animated surface with depth gradient + shore foam */
