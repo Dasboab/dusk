@@ -1,3 +1,0 @@
-Textures under assets/textures/ are derived from ambientCG.com (Lennart Demes),
-licensed CC0 1.0 (public domain). Source materials: Metal049A, Ground054.
-Downscaled to 512px for web delivery. No attribution required; included for provenance.

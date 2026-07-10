@@ -48,6 +48,3 @@ Earlier iterations layered gameplay through `v0x_patch.js` files injected at run
 (`v04_patch.js`) called a `formation()` function that never existed, which threw on every move order
 and made the game look frozen. v0.5 folds the good ideas from those patches natively into
 `index.html` and retires the patch loader. The old patches now live in `/archive`.
-
-## Assets
-Procedural meshes plus CC0 surface textures from ambientCG (Metal049A, Ground054), vendored under `assets/textures/` and re-scaled to 512px. Unit portrait thumbnails are baked to `assets/units/`. All bundled in-repo; nothing loads from a remote host at runtime. See `assets/textures/CREDITS.txt`.
