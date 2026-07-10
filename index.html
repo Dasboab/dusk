@@ -3195,7 +3195,6 @@ aiTick=function(dt){
     if(!root||!root.traverse)return;
     root.traverse(n=>{
       if(!n.isMesh||!n.material)return;
-      if(n.userData&&n.userData.__gltf)return;   // leave GLTF model materials untouched
       if(Array.isArray(n.material))n.material.forEach(militariseMat); else militariseMat(n.material);
       // muddy the ground
       if(n.geometry&&n.geometry.type==='PlaneGeometry'){
@@ -3218,8 +3217,6 @@ aiTick=function(dt){
     b.position.set(x,y,z);b.castShadow=true;g.add(b);return b;}
   function greeble(mesh,type,def,isB){
     if(!mesh)return;
-    if(window.__isGltfType&&window.__isGltfType(type))return;  // GLTF models carry their own detail
-
     /* Measure the structural hull in the mesh's OWN local frame, ignoring the
        selection ring, the health-bar sprite, world rotation and thin masts.
        Then bolt detail onto the real DECK (top of the main body, not the overall
@@ -3423,15 +3420,14 @@ aiTick=function(dt){
 /* ==================== END V0.5g ==================== */
 
 /* ============================ GLTF MODEL PIPELINE ============================ */
-/* Units and buildings drop in as .glb files. Any type NOT in MODELS keeps its
-   procedural mesh. Meshes are position-only with baked per-vertex AO (COLOR_0);
-   tintAO() applies smooth normals, a muted team colour that multiplies the AO,
-   and PBR so forms read with depth. normalise() auto-frames: units scale to
-   targetH, buildings scale to their BDEF footprint, both seated on the ground,
-   with an auto-yaw that aligns long hulls down +Z. Draco handled automatically. */
+/* Realistic road: real modelled units drop in here as .glb files.
+   Any type NOT listed in MODELS uses its procedural mesh unchanged.
+   To convert a unit: drop assets/models/<name>.glb and add one line to MODELS.
+   The loader auto-frames to targetH, seats feet on the ground, applies yaw and
+   handles Draco compression and skinned meshes, so any export slots in cleanly. */
 (function(){
   const MODELS = (window.MODELS = window.MODELS || {});
-  const CACHE  = {};
+  const CACHE  = {};     /* type -> {tmpl, skinned} */
   let _loaderP = null;
 
   const GLTF_URL  = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
@@ -3446,7 +3442,7 @@ aiTick=function(dt){
     if(_loaderP) return _loaderP;
     _loaderP = (async()=>{
       if(!(window.THREE&&THREE.GLTFLoader)) await inject(GLTF_URL);
-      if(!THREE.SkeletonUtils) await inject(SKEL_URL);
+      if(!THREE.SkeletonUtils) await inject(SKEL_URL);            /* correct skinned cloning */
       const loader=new THREE.GLTFLoader();
       if(Object.values(MODELS).some(m=>m&&m.draco)){
         if(!THREE.DRACOLoader) await inject(DRACO_URL);
@@ -3459,107 +3455,14 @@ aiTick=function(dt){
 
   function isSkinned(o){let s=false;o.traverse(m=>{if(m.isSkinnedMesh)s=true;});return s;}
 
-  /* low env so the environment map does not wash the albedo to grey */
-  var DEFAULT_ENV=0.18;
-
-  /* painted team colour that multiplies the baked AO in COLOR_0 */
-  var PAINT={};
-  function hash3(x,y,z){var s=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453;return s-Math.floor(s);}
-  function tintAO(g,team,spec){
-    spec=spec||{};
-    var TC=(typeof TEAM_COL!=='undefined'&&TEAM_COL)?TEAM_COL:null;
-    var raw=TC?TC[team]:(team?0xff5148:0x37e0cf);
-    var base=new THREE.Color(raw),hsl={};base.getHSL(hsl);
-    /* lift saturation so even muted team colours read as painted, keep a mid value */
-    base.setHSL(hsl.h, Math.min(0.82,hsl.s*1.8+0.30), Math.min(0.55,Math.max(0.42,hsl.l)));
-    var alt=base.clone(); alt.getHSL(hsl); alt.setHSL((hsl.h+0.05)%1, hsl.s*0.9, hsl.l*0.62);
-    var dark=new THREE.Color(0x3d3a30).lerp(base,0.25);
-    var rubber=new THREE.Color(0x1d1f23);
-    var e=(spec.env==null?DEFAULT_ENV:spec.env);
-    var isB=!!spec.build;
-    g.traverse(function(o){ if(!o.isMesh)return;
-      if(o.geometry&&!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-      var key=o.geometry.uuid+'|'+team+'|'+(isB?'b':'u');
-      if(PAINT[key]){ o.geometry=PAINT[key]; }
-      else{
-        var geo=o.geometry.clone();      /* per-team paint; template stays pristine */
-        var P=geo.attributes.position,N=geo.attributes.normal,A=geo.attributes.color;
-        /* r128 getX returns raw stored values: denormalise byte/short AO */
-        var aoDiv=1;
-        if(A){var ar=A.array;
-          if(ar instanceof Uint8Array||ar instanceof Uint8ClampedArray)aoDiv=255;
-          else if(ar instanceof Uint16Array)aoDiv=65535;
-          else if(ar instanceof Int8Array)aoDiv=127;
-          else if(ar instanceof Int16Array)aoDiv=32767;}
-        geo.computeBoundingBox(); var bb=geo.boundingBox;
-        var H=(bb.max.y-bb.min.y)||1;
-        var maxD=Math.max(bb.max.x-bb.min.x,H,bb.max.z-bb.min.z)||1;
-        var f=(isB?4.5:5.5)/maxD, wheelY=bb.min.y+H*0.16;
-        var out=new Float32Array(P.count*3), c=new THREE.Color();
-        for(var i=0;i<P.count;i++){
-          var x=P.getX(i),y=P.getY(i),z=P.getZ(i);
-          var ao=A?Math.min(1,A.getX(i)/aoDiv):1;
-          if(!isB && y<wheelY){ c.copy(rubber); }         /* wheels, tracks, boots */
-          else{
-            var n=hash3(Math.floor(x*f),Math.floor(y*f),Math.floor(z*f));
-            c.copy(n>0.60?alt:(n<0.13?dark:base));        /* blocky camo patches */
-            if(N.getY(i)>0.72) c.multiplyScalar(1.10);    /* sunlit top surfaces */
-          }
-          out[i*3]=c.r*ao; out[i*3+1]=c.g*ao; out[i*3+2]=c.b*ao;
-        }
-        geo.setAttribute('color',new THREE.BufferAttribute(out,3));
-        PAINT[key]=geo; o.geometry=geo;
-      }
-      o.material=new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,
-        metalness:0.06,roughness:0.85,envMapIntensity:e});
-      o.castShadow=true; o.receiveShadow=true; o.userData.__gltf=true;
-    });
-  }
-  window.__tintAO = tintAO;
-  window.__isGltfType = function(t){ return !!(window.MODELS && window.MODELS[t]); };
-
-  /* soft contact shadow so units sit on the ground instead of floating */
-  var _blobTex=null;
-  function blobTex(){
-    if(_blobTex)return _blobTex;
-    var c=document.createElement('canvas');c.width=c.height=64;
-    var x=c.getContext('2d');
-    var grd=x.createRadialGradient(32,32,4,32,32,31);
-    grd.addColorStop(0,'rgba(255,255,255,0.85)');
-    grd.addColorStop(0.65,'rgba(255,255,255,0.45)');
-    grd.addColorStop(1,'rgba(255,255,255,0)');
-    x.fillStyle=grd;x.fillRect(0,0,64,64);
-    _blobTex=new THREE.CanvasTexture(c);return _blobTex;
-  }
-  function addBlob(g,inst,type){
-    var def=(window.UDEF&&UDEF[type])||{};
-    if(def.domain==='sea'||def.domain==='air')return;
-    var bb=new THREE.Box3().setFromObject(inst), s=new THREE.Vector3(); bb.getSize(s);
-    var r=Math.max(s.x,s.z)*0.62;
-    var m=new THREE.Mesh(new THREE.PlaneGeometry(r*2,r*2),
-      new THREE.MeshBasicMaterial({map:blobTex(),color:0x000000,transparent:true,
-        opacity:0.4,depthWrite:false}));
-    m.rotation.x=-Math.PI/2; m.position.y=0.06; m.renderOrder=1; g.add(m);
-  }
-
-  function normalise(root, spec, type){
+  function normalise(root, spec){
     let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
-    let s;
-    if(spec.build){
-      const foot=((window.BDEF&&BDEF[type])?BDEF[type].size:8)*(spec.footFrac||0.94);
-      s=foot/(Math.max(size.x,size.z)||1);
-    } else {
-      s=(spec.targetH||2.2)/(size.y||1);
-    }
-    root.scale.setScalar(s*(spec.scale||1));
+    root.scale.setScalar(((spec.targetH||2.2)/(size.y||1))*(spec.scale||1));
     box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
     root.position.x-=c.x; root.position.z-=c.z; root.position.y-=box.min.y;
-    box=new THREE.Box3().setFromObject(root); box.getSize(size);
-    let yaw=spec.yaw;
-    if(yaw==null && spec.autoYaw!==false) yaw=(size.x>size.z*1.15)?Math.PI/2:0;
-    if(yaw) root.rotation.y=yaw;
+    if(spec.yaw) root.rotation.y=spec.yaw;
     root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;
-      if(o.material)o.material.envMapIntensity=(spec.env==null?DEFAULT_ENV:spec.env);}});
+      if(o.material){o.material.envMapIntensity=(spec.env==null?1.0:spec.env);}}});
     return root;
   }
 
@@ -3576,54 +3479,55 @@ aiTick=function(dt){
   };
   window.__gltfReady = function(t){return !!CACHE[t];};
 
-  /* ---- unit meshes ---- */
-  const _mkUnit = makeUnitMesh;
+  const _mkPrev = makeUnitMesh;
   makeUnitMesh = function(type,team){
-    const hit=CACHE[type]; const spec=MODELS[type]||{};
-    if(!hit||spec.build) return _mkUnit(type,team);
+    const hit=CACHE[type];
+    if(!hit) return _mkPrev(type,team);
+    const spec=MODELS[type]||{};
     const inst=(hit.skinned&&THREE.SkeletonUtils)?THREE.SkeletonUtils.clone(hit.tmpl):hit.tmpl.clone(true);
-    normalise(inst,spec,type);
+    normalise(inst,spec);
     const g=new THREE.Group(); g.add(inst);
     if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
-    g.userData.gltf=true; g.userData.inst=inst;
-    if(spec.dress){try{spec.dress(g,team,spec);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
-    addBlob(g,inst,type);
+    g.userData.gltf=true;
+    if(spec.dress){try{spec.dress(g,team);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
     return g;
   };
 
-  /* ---- building meshes ---- */
-  const _mkBld = makeBuildingMesh;
-  makeBuildingMesh = function(type,team){
-    const hit=CACHE[type]; const spec=MODELS[type];
-    if(!hit||!spec||!spec.build) return _mkBld(type,team);
-    const inst=hit.tmpl.clone(true);
-    normalise(inst,spec,type);
-    const g=new THREE.Group(); g.add(inst); g.userData.gltf=true; g.userData.inst=inst;
-    if(spec.dress){try{spec.dress(g,team,spec);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
-    return g;
+  /* --- registered CC0 models (Quaternius, CC0 1.0) ----------------------- */
+  MODELS.tank   = { url:'assets/models/tank.glb',   targetH:2.4, yaw:0 };
+  /* Drone Dog: AI-generated base mesh (Shap-E, public domain output), dressed at
+     runtime with a gunmetal drone skin, team-tinted sensor + muzzle, and a
+     back-mounted cannon. One asset, no baked colours. */
+  MODELS.dogbot = {
+    url:'assets/models/dogbot.glb', targetH:1.75, yaw:0,
+    prep:function(root){
+      root.traverse(function(o){ if(o.isMesh){
+        if(o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+        o.material=new THREE.MeshStandardMaterial({color:0x2b3239,metalness:0.82,roughness:0.38,envMapIntensity:1.0});
+      }});
+    },
+    dress:function(g,team){
+      var col=(window.TEAM_COL?TEAM_COL[team]:(team?0xff5148:0x37e0cf));
+      var box=new THREE.Box3().setFromObject(g), s=new THREE.Vector3(); box.getSize(s);
+      var w=s.x,h=s.y,d=s.z,topY=box.max.y,frontZ=box.max.z;
+      var metal=new THREE.MeshStandardMaterial({color:0x20252b,metalness:0.85,roughness:0.34,envMapIntensity:1.0});
+      var glow=new THREE.MeshStandardMaterial({color:0x0a0a0a,emissive:new THREE.Color(col),emissiveIntensity:2.3,metalness:0.2,roughness:0.5});
+      var wep=new THREE.Group();
+      var mount=new THREE.Mesh(new THREE.BoxGeometry(w*0.38,h*0.16,d*0.32),metal); mount.castShadow=true; wep.add(mount);
+      var bl=d*0.55;
+      var barrel=new THREE.Mesh(new THREE.CylinderGeometry(w*0.05,w*0.058,bl,12),metal);
+      barrel.rotation.x=Math.PI/2; barrel.position.set(0,h*0.015,d*0.24+bl*0.5); barrel.castShadow=true; wep.add(barrel);
+      var muzzle=new THREE.Mesh(new THREE.CylinderGeometry(w*0.078,w*0.078,h*0.05,12),glow);
+      muzzle.rotation.x=Math.PI/2; muzzle.position.set(0,h*0.015,d*0.24+bl); wep.add(muzzle);
+      wep.position.set(0,topY*0.86,0); g.add(wep);
+      var eye=new THREE.Mesh(new THREE.SphereGeometry(Math.max(w,0.2)*0.11,12,10),glow);
+      eye.position.set(0,topY*0.8,frontZ*0.72); g.add(eye);
+    }
   };
-
-  /* ===== UNITS (Meshy geometry, decimated, baked AO, team-tinted) ===== */
-  MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO };
-  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, dress:tintAO };
-  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, dress:tintAO };
-  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, dress:tintAO };
-  MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, dress:tintAO };
-  MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO };
-  MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO };
-  MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO };
-  MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, dress:tintAO };
-  MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO };
-  MODELS.rifleman  = { url:'assets/models/infantry.glb', targetH:1.9, draco:true, dress:tintAO };
-  MODELS.rocketeer = { url:'assets/models/infantry.glb', targetH:1.9, draco:true, dress:tintAO };
-
-  /* ===== BUILDINGS (scaled to BDEF footprint) ===== */
-  MODELS.conyard   = { url:'assets/models/conyard.glb',   build:true, draco:true, dress:tintAO };
-  MODELS.power     = { url:'assets/models/power.glb',     build:true, draco:true, dress:tintAO };
-  MODELS.refinery  = { url:'assets/models/refinery.glb',  build:true, draco:true, dress:tintAO };
-  MODELS.barracks  = { url:'assets/models/barracks.glb',  build:true, draco:true, dress:tintAO };
-  MODELS.factory   = { url:'assets/models/factory.glb',   build:true, draco:true, dress:tintAO };
-  MODELS.navalyard = { url:'assets/models/navalyard.glb', build:true, draco:true, dress:tintAO };
+  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, yaw:0 };
+  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, yaw:0 };
+  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, yaw:0 };  /* Pickup Tank */
+  MODELS.droneugv  = { url:'assets/models/droneugv.glb',  targetH:2.2, yaw:0 };  /* Robot Enemy, ground drone */
 
   if(Object.keys(MODELS).length) window.__loadModels();
 })();
@@ -3807,84 +3711,6 @@ aiTick=function(dt){
   function boot() { addLauncher(); autoReconnect(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
-
-/* ==================== V0.5j POLISH ==================== */
-/* (1) Fog of war is multiplied straight into the terrain shader. The old
-      approach was a second terrain-shaped plane hovering 0.35 above the
-      ground; terrain bumps poked through it and read as pale floating
-      squares. With the fog sampled inside the ground material there is no
-      second surface, so the artefact cannot exist.
-   (2) Movement animation for GLTF units: infantry get a walk bob, sway and
-      forward lean; ground vehicles get suspension jitter. Boats already
-      bob in the core loop.                                               */
-(function(){
-
-  /* ---- 1. fog into terrain ---- */
-  function fogToTerrain(){
-    let fogMesh=null;
-    scene.traverse(n=>{ if(n.isMesh&&n.renderOrder===5&&n.material&&n.material.map) fogMesh=n; });
-    if(!fogMesh||fogMesh.userData._sunk) return;
-    const fogTex=fogMesh.material.map;
-    let terrain=null,best=0;
-    scene.children.forEach(n=>{
-      if(n!==fogMesh&&n.isMesh&&n.geometry&&n.geometry.type==='PlaneGeometry'&&
-         n.material&&n.material.isMeshStandardMaterial){
-        const p=n.geometry.parameters||{}, a=(p.width||0)*(p.height||0);
-        if(a>best){best=a;terrain=n;}
-      }
-    });
-    if(!terrain) return;
-    fogMesh.visible=false; fogMesh.userData._sunk=true;
-    const mat=terrain.material;
-    mat.onBeforeCompile=function(sh){
-      sh.uniforms.uFow={value:fogTex};
-      sh.vertexShader='varying vec2 vFowUv;\n'+sh.vertexShader
-        .replace('#include <uv_vertex>','#include <uv_vertex>\n\tvFowUv=uv;');
-      sh.fragmentShader='varying vec2 vFowUv;\nuniform sampler2D uFow;\n'+sh.fragmentShader
-        .replace('#include <dithering_fragment>',
-          '#include <dithering_fragment>\n\tvec4 fowC=texture2D(uFow,vFowUv);\n'+
-          '\tgl_FragColor.rgb=mix(gl_FragColor.rgb,vec3(0.016,0.013,0.035),fowC.a);');
-    };
-    mat.needsUpdate=true;
-  }
-  fogToTerrain();
-  const _bw=buildWorld; buildWorld=function(){ _bw(); fogToTerrain(); };
-
-  /* ---- 2. unit motion ---- */
-  function motionStep(dt){
-    if(typeof G==='undefined'||!G||!G.ents)return;
-    for(const e of G.ents){
-      const m=e.mesh; if(!m||!m.userData||!m.userData.gltf)continue;
-      const inst=m.userData.inst; if(!inst)continue;
-      const def=e.def||{};
-      if(def.speed==null||def.domain==='sea'||def.domain==='air')continue;
-      const ax=(e._ax==null?e.pos.x:e._ax), az=(e._az==null?e.pos.z:e._az);
-      const sp=Math.hypot(e.pos.x-ax,e.pos.z-az)/dt;
-      e._ax=e.pos.x; e._az=e.pos.z;
-      const moving=sp>0.4&&!e.dead;
-      if(e._by==null)e._by=inst.position.y;          /* normalise() ground offset */
-      e._wt=(e._wt==null?Math.random()*6:e._wt)+dt*(moving?Math.min(sp,12):0);
-      if(def.armor==='inf'){
-        inst.position.y=e._by+(moving?Math.abs(Math.sin(e._wt*7.5))*0.11:0);
-        inst.rotation.z=moving?Math.sin(e._wt*7.5)*0.06:0;
-        inst.rotation.x=moving?0.08:0;
-      }else{
-        inst.position.y=e._by+(moving?Math.abs(Math.sin(e._wt*11))*0.05:0);
-        inst.rotation.z=moving?Math.sin(e._wt*5.5)*0.018:0;
-        inst.rotation.x=moving?Math.sin(e._wt*7)*0.012:0;
-      }
-    }
-  }
-  window.__motionStep=motionStep;
-  let lastT=performance.now();
-  function motion(){
-    requestAnimationFrame(motion);
-    const now=performance.now(), dt=Math.min(0.1,(now-lastT)/1000)||0.016; lastT=now;
-    motionStep(dt);
-  }
-  motion();
-})();
-/* ==================== END V0.5j ==================== */
 
 /* ============================ START / END ============================ */
 function endGame(win){
