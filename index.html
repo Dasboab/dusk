@@ -3564,8 +3564,17 @@ aiTick=function(dt){
     m.rotation.x=-Math.PI/2; m.position.y=0.06; m.renderOrder=1; g.add(m);
   }
 
+  function boneBox(root){
+    let has=false; const b=new THREE.Box3(); const v=new THREE.Vector3();
+    root.updateMatrixWorld(true);
+    root.traverse(o=>{if(o.isBone){has=true; o.getWorldPosition(v); b.expandByPoint(v);}});
+    return has?b:null;
+  }
   function normalise(root, spec, type){
-    let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
+    /* skinned exports carry armature scale the geometry bbox misses; measure bones instead */
+    const sb0=boneBox(root);
+    let box=sb0||new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
+    if(sb0) size.y*=1.12;   /* bones span ankle-to-skull; pad to true height */
     let s;
     if(spec.build){
       const foot=((window.BDEF&&BDEF[type])?BDEF[type].size:8)*(spec.footFrac||0.94);
@@ -3574,9 +3583,9 @@ aiTick=function(dt){
       s=(spec.targetH||2.2)/(size.y||1);
     }
     root.scale.setScalar(s*(spec.scale||1));
-    box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
+    box=boneBox(root)||new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
     root.position.x-=c.x; root.position.z-=c.z; root.position.y-=box.min.y;
-    box=new THREE.Box3().setFromObject(root); box.getSize(size);
+    box=boneBox(root)||new THREE.Box3().setFromObject(root); box.getSize(size);
     let yaw=spec.yaw;
     if(yaw==null && spec.autoYaw!==false) yaw=(size.x>size.z*1.15)?Math.PI/2:0;
     if(yaw) root.rotation.y=yaw;
