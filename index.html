@@ -224,12 +224,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 'use strict';
 /* ============================ CONFIG ============================ */
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-const HALF = 210;                  // world spans -210..210 (expansive open field)
-const SHORE = 148;                 // base eastern shoreline x
-let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
-(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
-  try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
-  if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
+const HALF = 150;                  // world spans -150..150
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
 const TEAM_COL = [0x37e0cf, 0xff5148];
@@ -312,12 +307,10 @@ const FLATS=[
   {x:0,z:12,r:12},{x:-18,z:-14,r:12},                // centre rich
   {x:-52,z:-58,r:10},{x:52,z:58,r:10},{x:-4,z:70,r:10},{x:4,z:-72,r:10}
 ];
-function shoreX(z){return SHORE+Math.sin((z+WSZ)*0.05)*10+Math.sin((z+WSZ)*0.017)*6;}
+function shoreX(z){return 122+Math.sin(z*0.05)*8;}
 function isWater(x,z){return x>shoreX(z);}
 function groundH(x,z){
-  const sx=x+WSX, sz=z+WSZ;
-  let ridge = Math.pow(vnoise(sx*0.012+5, sz*0.012+9), 2.3)*10;   // occasional highlands / rock
-  let h = vnoise(sx*0.035+31,sz*0.035+7)*5.2 + vnoise(sx*0.11,sz*0.11)*1.2 + ridge - 3.6;
+  let h = vnoise(x*0.035+31,z*0.035+7)*5.2 + vnoise(x*0.11,z*0.11)*1.2 - 2.8;
   let f=0;
   for(const p of FLATS){const dd=Math.sqrt(d2(x,z,p.x,p.z)); if(dd<p.r+9) f=Math.max(f, 1-Math.max(0,dd-p.r)/9);}
   let g = lerp(h, 0.15, f);
@@ -403,24 +396,11 @@ function buildTerrainGeo(){
 {
   const geo=buildTerrainGeo();
   const cols=[]; const pos=geo.attributes.position;
-  const C_DEEP =new THREE.Color(0x1a4a63), C_SHALLOW=new THREE.Color(0x2f86a4),
-        C_SAND =new THREE.Color(0xc7b077), C_GRASS=new THREE.Color(0x62842f),
-        C_DIRT =new THREE.Color(0x8f6a3e), C_FOREST=new THREE.Color(0x395a26),
-        C_ROCK =new THREE.Color(0x817a8c), C_PEAK =new THREE.Color(0xb1abb8);
-  const tmp=new THREE.Color();
+  const cA=new THREE.Color(0x4a3350), cB=new THREE.Color(0x6b4a45), cC=new THREE.Color(0x2e2338);
   for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i), h=pos.getY(i);
-    const m=vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80);          // moisture 0..1
-    const sh=shoreX(z), nearShore = x>sh-22;
-    let c;
-    if(h < -1.6){ c=tmp.copy(C_DEEP).lerp(C_SHALLOW, clamp((h+4)/2.4,0,1)); }
-    else if(nearShore && h < 0.9){ c=tmp.copy(C_SAND); }         // beach band
-    else if(h > 8.2){ c=tmp.copy(C_PEAK); }                      // bare peaks
-    else if(h > 4.6){ c=tmp.copy(C_ROCK).lerp(m>0.5?C_FOREST:C_DIRT, 0.35); } // highland flanks
-    else if(m > 0.63 && h > 1.1){ c=tmp.copy(C_FOREST); }        // moist upland forest
-    else { c=tmp.copy(m>0.47?C_GRASS:C_DIRT); }                  // lowland grass/steppe
-    const dith = 0.90 + vnoise(x*0.5+3,z*0.5+9)*0.16;            // subtle per-vertex shade
-    cols.push(c.r*dith, c.g*dith, c.b*dith);
+    const h=pos.getY(i), n=vnoise(pos.getX(i)*0.25, pos.getZ(i)*0.25);
+    const c=cC.clone().lerp(cA,clamp((h+3)/6,0,1)).lerp(cB,n*0.4);
+    cols.push(c.r,c.g,c.b);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
   const ter=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, metalness:0.0, roughness:0.97}));
@@ -428,11 +408,10 @@ function buildTerrainGeo(){
 }
 /* eastern sea */
 {
-  const seaStart=SHORE-16;
-  const w=TSIZE/2-seaStart;
+  const w=TSIZE/2-108;
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(w,TSIZE),
     new THREE.MeshStandardMaterial({color:new THREE.Color(0x1c5468).convertSRGBToLinear(), transparent:true, opacity:0.9, metalness:0.18, roughness:0.15, envMapIntensity:1.7}));
-  sea.rotation.x=-Math.PI/2; sea.position.set(seaStart+w/2, 0.12, 0);
+  sea.rotation.x=-Math.PI/2; sea.position.set(108+w/2, 0.1, 0);
   scene.add(sea);
 }
 
@@ -442,17 +421,15 @@ function buildTerrainGeo(){
   const trunkGeo=new THREE.CylinderGeometry(0.28,0.36,1.6,5);
   const tMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x1e3a34).convertSRGBToLinear(), metalness:0.0, roughness:0.82});
   const kMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x3a2a28).convertSRGBToLinear(), metalness:0.0, roughness:0.86});
-  const N=IS_TOUCH?300:460;
+  const N=IS_TOUCH?190:260;
   const tI=new THREE.InstancedMesh(treeGeo,tMat,N), kI=new THREE.InstancedMesh(trunkGeo,kMat,N);
   tI.castShadow=kI.castShadow=true;
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
   let n=0, guard=0;
-  while(n<N && guard++<16000){
+  while(n<N && guard++<9000){
     const x=rand(-HALF+4,HALF-4), z=rand(-HALF+4,HALF-4);
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+5)*(f.r+5)){ok=false;break;} }
-    const gh=groundH(x,z);
-    if(!ok || x>shoreX(z)-7 || gh<0.6 || gh>7.6) continue;
-    if(vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80)<0.58) continue;  // moist forest zones only
+    if(!ok || x>shoreX(z)-7 || vnoise(x*0.06,z*0.06)<0.55) continue;
     const h=groundH(x,z), sc=rand(0.8,1.5);
     s.set(sc,sc,sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
     p.set(x,h+2.3*sc,z); m.compose(p,q,s); tI.setMatrixAt(n,m);
@@ -463,13 +440,12 @@ function buildTerrainGeo(){
 
   const rockGeo=new THREE.DodecahedronGeometry(1.1,0);
   const rMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x574a5c).convertSRGBToLinear(), metalness:0.06, roughness:0.8});
-  const R=IS_TOUCH?110:170, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
+  const R=IS_TOUCH?60:90, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
   rI.castShadow=true; let rn=0; guard=0;
-  while(rn<R && guard++<9000){
+  while(rn<R && guard++<4000){
     const x=rand(-HALF+3,HALF-3), z=rand(-HALF+3,HALF-3);
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+3)*(f.r+3)){ok=false;break;} }
     if(!ok || x>shoreX(z)-5) continue;
-    if(groundH(x,z)<3.2 && Math.random()<0.7) continue;   // cluster on highlands
     const sc=rand(0.5,1.8);
     s.set(sc,sc*rand(0.6,1),sc); q.setFromEuler(new THREE.Euler(rand(0,3),rand(0,3),rand(0,3)));
     p.set(x,groundH(x,z)+0.3,z); m.compose(p,q,s); rI.setMatrixAt(rn,m); rn++;
@@ -3418,299 +3394,6 @@ aiTick=function(dt){
   THREE.ConeGeometry.prototype=_Cone.prototype;
 })();
 /* ==================== END V0.5g ==================== */
-
-/* ============================ GLTF MODEL PIPELINE ============================ */
-/* Realistic road: real modelled units drop in here as .glb files.
-   Any type NOT listed in MODELS uses its procedural mesh unchanged.
-   To convert a unit: drop assets/models/<name>.glb and add one line to MODELS.
-   The loader auto-frames to targetH, seats feet on the ground, applies yaw and
-   handles Draco compression and skinned meshes, so any export slots in cleanly. */
-(function(){
-  const MODELS = (window.MODELS = window.MODELS || {});
-  const CACHE  = {};     /* type -> {tmpl, skinned} */
-  let _loaderP = null;
-
-  const GLTF_URL  = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
-  const DRACO_URL = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js';
-  const SKEL_URL  = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js';
-  const DRACO_DEC = 'https://www.gstatic.com/draco/versioned/decoders/1.5.6/';
-
-  function inject(src){return new Promise((res,rej)=>{const s=document.createElement('script');
-    s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error('script '+src));document.head.appendChild(s);});}
-
-  function ensureLoader(){
-    if(_loaderP) return _loaderP;
-    _loaderP = (async()=>{
-      if(!(window.THREE&&THREE.GLTFLoader)) await inject(GLTF_URL);
-      if(!THREE.SkeletonUtils) await inject(SKEL_URL);            /* correct skinned cloning */
-      const loader=new THREE.GLTFLoader();
-      if(Object.values(MODELS).some(m=>m&&m.draco)){
-        if(!THREE.DRACOLoader) await inject(DRACO_URL);
-        const d=new THREE.DRACOLoader(); d.setDecoderPath(DRACO_DEC); loader.setDRACOLoader(d);
-      }
-      return loader;
-    })();
-    return _loaderP;
-  }
-
-  function isSkinned(o){let s=false;o.traverse(m=>{if(m.isSkinnedMesh)s=true;});return s;}
-
-  function normalise(root, spec){
-    let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
-    root.scale.setScalar(((spec.targetH||2.2)/(size.y||1))*(spec.scale||1));
-    box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
-    root.position.x-=c.x; root.position.z-=c.z; root.position.y-=box.min.y;
-    if(spec.yaw) root.rotation.y=spec.yaw;
-    root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;
-      if(o.material){o.material.envMapIntensity=(spec.env==null?1.0:spec.env);}}});
-    return root;
-  }
-
-  window.__loadModels = function(){
-    const types=Object.keys(MODELS);
-    if(!types.length) return Promise.resolve();
-    return ensureLoader().then(loader=>Promise.all(types.map(t=>new Promise(res=>{
-      loader.load(MODELS[t].url, g=>{const sc=g.scene||g.scenes[0];
-        var _lts=[]; sc.traverse(function(o){if(o.isLight)_lts.push(o);}); _lts.forEach(function(l){l.parent&&l.parent.remove(l);});
-        if(MODELS[t].prep){try{MODELS[t].prep(sc);}catch(e){console.warn('[gltf] prep',t,e&&e.message);}}
-        CACHE[t]={tmpl:sc, skinned:isSkinned(sc)}; res();},
-        undefined, err=>{console.warn('[gltf] load failed',t,err&&err.message); res();});
-    })))).catch(e=>console.warn('[gltf] init failed', e&&e.message));
-  };
-  window.__gltfReady = function(t){return !!CACHE[t];};
-
-  const _mkPrev = makeUnitMesh;
-  makeUnitMesh = function(type,team){
-    const hit=CACHE[type];
-    if(!hit) return _mkPrev(type,team);
-    const spec=MODELS[type]||{};
-    const inst=(hit.skinned&&THREE.SkeletonUtils)?THREE.SkeletonUtils.clone(hit.tmpl):hit.tmpl.clone(true);
-    normalise(inst,spec);
-    const g=new THREE.Group(); g.add(inst);
-    if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
-    g.userData.gltf=true;
-    if(spec.dress){try{spec.dress(g,team);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
-    return g;
-  };
-
-  /* --- registered CC0 models (Quaternius, CC0 1.0) ----------------------- */
-  MODELS.tank   = { url:'assets/models/tank.glb',   targetH:2.4, yaw:0 };
-  /* Drone Dog: AI-generated base mesh (Shap-E, public domain output), dressed at
-     runtime with a gunmetal drone skin, team-tinted sensor + muzzle, and a
-     back-mounted cannon. One asset, no baked colours. */
-  MODELS.dogbot = {
-    url:'assets/models/dogbot.glb', targetH:1.75, yaw:0,
-    prep:function(root){
-      root.traverse(function(o){ if(o.isMesh){
-        if(o.geometry && !o.geometry.attributes.normal) o.geometry.computeVertexNormals();
-        o.material=new THREE.MeshStandardMaterial({color:0x2b3239,metalness:0.82,roughness:0.38,envMapIntensity:1.0});
-      }});
-    },
-    dress:function(g,team){
-      var col=(window.TEAM_COL?TEAM_COL[team]:(team?0xff5148:0x37e0cf));
-      var box=new THREE.Box3().setFromObject(g), s=new THREE.Vector3(); box.getSize(s);
-      var w=s.x,h=s.y,d=s.z,topY=box.max.y,frontZ=box.max.z;
-      var metal=new THREE.MeshStandardMaterial({color:0x20252b,metalness:0.85,roughness:0.34,envMapIntensity:1.0});
-      var glow=new THREE.MeshStandardMaterial({color:0x0a0a0a,emissive:new THREE.Color(col),emissiveIntensity:2.3,metalness:0.2,roughness:0.5});
-      var wep=new THREE.Group();
-      var mount=new THREE.Mesh(new THREE.BoxGeometry(w*0.38,h*0.16,d*0.32),metal); mount.castShadow=true; wep.add(mount);
-      var bl=d*0.55;
-      var barrel=new THREE.Mesh(new THREE.CylinderGeometry(w*0.05,w*0.058,bl,12),metal);
-      barrel.rotation.x=Math.PI/2; barrel.position.set(0,h*0.015,d*0.24+bl*0.5); barrel.castShadow=true; wep.add(barrel);
-      var muzzle=new THREE.Mesh(new THREE.CylinderGeometry(w*0.078,w*0.078,h*0.05,12),glow);
-      muzzle.rotation.x=Math.PI/2; muzzle.position.set(0,h*0.015,d*0.24+bl); wep.add(muzzle);
-      wep.position.set(0,topY*0.86,0); g.add(wep);
-      var eye=new THREE.Mesh(new THREE.SphereGeometry(Math.max(w,0.2)*0.11,12,10),glow);
-      eye.position.set(0,topY*0.8,frontZ*0.72); g.add(eye);
-    }
-  };
-  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, yaw:0 };
-  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, yaw:0 };
-  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, yaw:0 };  /* Pickup Tank */
-  MODELS.droneugv  = { url:'assets/models/droneugv.glb',  targetH:2.2, yaw:0 };  /* Robot Enemy, ground drone */
-
-  if(Object.keys(MODELS).length) window.__loadModels();
-})();
-
-/* ============================================================
-   v05i_net.js  -  Dusk multiplayer client (lobby + seed handshake)
-   Connects to the dusk-mp worker (Durable Object rooms). Opt-in:
-   nothing runs until the player opens the lobby or the URL carries
-   ?mp=CODE, so single-player is completely unaffected.
-
-   Set the worker URL once after deploying dusk-mp:
-     window.DUSK_MP_URL = 'https://dusk-mp.<subdomain>.workers.dev';
-   ============================================================ */
-(function () {
-  'use strict';
-  if (window.DuskNet) return;
-
-  var CFG = (window.DUSK_MP_URL || 'https://dusk-mp.rasykes1992.workers.dev').replace(/\/+$/, '');
-  function httpBase() { return CFG; }
-  function wsBase() { return CFG.replace(/^http/, 'ws'); }
-
-  var Net = {
-    active: false, ws: null, role: null, slot: -1, host: -1,
-    seed: null, code: null, max: 2, players: [], name: 'Cmdr',
-    onSnap: null, onEv: null,           // set by the sim layer later
-  };
-  window.DuskNet = Net;
-
-  /* ---- tiny DOM helpers ---- */
-  function el(tag, css, txt) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e; }
-  function post(path, body) {
-    return fetch(httpBase() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) { return r.json(); });
-  }
-
-  /* ---- overlay UI ---- */
-  var ui = {};
-  function buildUI() {
-    var wrap = el('div', 'position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;background:rgba(8,6,14,.72);font-family:system-ui,Segoe UI,Roboto,sans-serif;');
-    var panel = el('div', 'width:min(520px,92vw);background:#181026;border:1px solid #37e0cf55;border-radius:14px;padding:20px 22px;color:#e7e2f0;box-shadow:0 18px 60px #000a;');
-    panel.appendChild(el('div', 'font-size:20px;font-weight:700;letter-spacing:.5px;color:#37e0cf;margin-bottom:2px;', 'DUSK  Multiplayer'));
-    ui.sub = el('div', 'font-size:12px;color:#a99fc0;margin-bottom:14px;', 'Create a room or join with a code.');
-    panel.appendChild(ui.sub);
-
-    var row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;');
-    ui.nameIn = el('input'); ui.nameIn.value = Net.name; ui.nameIn.placeholder = 'Callsign';
-    ui.nameIn.style.cssText = 'flex:1 1 130px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
-    ui.maxSel = el('select'); [2, 3, 4].forEach(function (n) { var o = el('option', '', n + ' players'); o.value = n; ui.maxSel.appendChild(o); });
-    ui.maxSel.style.cssText = 'padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
-    row.appendChild(ui.nameIn); row.appendChild(ui.maxSel); panel.appendChild(row);
-
-    var row2 = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;');
-    ui.create = btn('Create room', '#37e0cf', '#04241f');
-    ui.codeIn = el('input'); ui.codeIn.placeholder = 'CODE'; ui.codeIn.maxLength = 6;
-    ui.codeIn.style.cssText = 'width:96px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;text-transform:uppercase;letter-spacing:2px;';
-    ui.join = btn('Join', '#ffb44a', '#2a1600');
-    row2.appendChild(ui.create); row2.appendChild(ui.codeIn); row2.appendChild(ui.join); panel.appendChild(row2);
-
-    ui.list = el('div', 'min-height:70px;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:10px;');
-    panel.appendChild(ui.list);
-
-    ui.chatLog = el('div', 'height:78px;overflow:auto;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:6px 9px;font-size:12px;color:#c9c2dc;margin-bottom:8px;display:none;');
-    panel.appendChild(ui.chatLog);
-    ui.chatIn = el('input'); ui.chatIn.placeholder = 'Message (Enter)';
-    ui.chatIn.style.cssText = 'width:100%;padding:8px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;margin-bottom:12px;display:none;';
-
-    panel.appendChild(ui.chatIn);
-
-    var foot = el('div', 'display:flex;gap:8px;justify-content:flex-end;');
-    ui.ready = btn('Ready', '#8f7bd6', '#160a26'); ui.ready.style.display = 'none';
-    ui.start = btn('Start match', '#37e0cf', '#04241f'); ui.start.style.display = 'none';
-    ui.close = btn('Close', '#3a3350', '#fff');
-    foot.appendChild(ui.ready); foot.appendChild(ui.start); foot.appendChild(ui.close);
-    panel.appendChild(foot);
-
-    wrap.appendChild(panel); document.body.appendChild(wrap); ui.wrap = wrap;
-
-    ui.create.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; createRoom(+ui.maxSel.value); };
-    ui.join.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; var c = ui.codeIn.value.trim().toUpperCase(); if (c) joinRoom(c); };
-    ui.close.onclick = function () { wrap.style.display = 'none'; };
-    ui.ready.onclick = function () { Net._ready = !Net._ready; ui.ready.textContent = Net._ready ? 'Not ready' : 'Ready'; sendMsg({ type: 'ready', ready: Net._ready, name: Net.name, faction: Net.slot }); };
-    ui.start.onclick = function () { sendMsg({ type: 'start' }); };
-    ui.chatIn.onkeydown = function (e) { if (e.key === 'Enter' && ui.chatIn.value.trim()) { sendMsg({ type: 'chat', text: ui.chatIn.value }); ui.chatIn.value = ''; } };
-  }
-  function btn(txt, bg, fg) { var b = el('button', 'padding:9px 14px;border:none;border-radius:8px;background:' + bg + ';color:' + fg + ';font-weight:600;cursor:pointer;', txt); return b; }
-
-  function openLobby() { if (!CFG) { alert('Multiplayer is not configured yet.\nDeploy the dusk-mp worker, then set window.DUSK_MP_URL.'); return; } if (!ui.wrap) buildUI(); ui.wrap.style.display = 'flex'; }
-  Net.openLobby = openLobby;
-
-  /* ---- lobby / connection ---- */
-  function createRoom(max) {
-    ui.sub.textContent = 'Creating room...';
-    post('/room', { max: max }).then(function (r) {
-      if (!r || !r.code) { ui.sub.textContent = 'Could not create room.'; return; }
-      connect(r.code, r.seed, max, true);
-    }).catch(function () { ui.sub.textContent = 'Network error. Check DUSK_MP_URL.'; });
-  }
-  function joinRoom(code) { ui.sub.textContent = 'Joining ' + code + '...'; connect(code, null, null, false); }
-
-  function connect(code, seed, max, asCreator) {
-    if (Net.ws) try { Net.ws.close(); } catch (e) {}
-    var q = '?room=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(Net.name);
-    if (seed != null) q += '&seed=' + (seed >>> 0);
-    if (max) q += '&max=' + max;
-    var ws = new WebSocket(wsBase() + '/ws' + q);
-    Net.ws = ws; Net.code = code;
-    ws.onopen = function () { if (ui.sub) ui.sub.textContent = 'Connected to ' + code + '.'; };
-    ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } handle(m); };
-    ws.onclose = function () { if (Net.active) banner('Disconnected from room.'); else if (ui.sub) ui.sub.textContent = 'Connection closed.'; };
-    ws.onerror = function () { if (ui.sub) ui.sub.textContent = 'Connection error.'; };
-  }
-  function sendMsg(o) { try { Net.ws && Net.ws.readyState === 1 && Net.ws.send(JSON.stringify(o)); } catch (e) {} }
-  Net.send = sendMsg;
-
-  function handle(m) {
-    switch (m.type) {
-      case 'welcome':
-        Net.slot = m.you; Net.host = m.host; Net.seed = m.seed; Net.code = m.code; Net.max = m.max;
-        Net.role = (m.you === m.host) ? 'host' : 'client'; Net.players = m.players || [];
-        renderLobby(); showLobbyControls(); break;
-      case 'lobby': Net.players = m.players || []; Net.host = m.host; renderLobby(); showLobbyControls(); break;
-      case 'start': beginMatch(m.seed); break;
-      case 'chat': chatLine((m.name || ('P' + m.from)) + ': ' + m.text); break;
-      case 'leave': chatLine('slot ' + m.slot + ' left'); break;
-      case 'host_left': banner('Host left. Match ended.'); break;
-      case 'order': if (Net.onOrder) Net.onOrder(m.from, m.order); break;
-      case 'snap': if (Net.onSnap) Net.onSnap(m); break;
-      case 'ev': if (Net.onEv) Net.onEv(m.ev); break;
-      case 'error': if (ui.sub) ui.sub.textContent = 'Room error: ' + m.reason; break;
-    }
-  }
-
-  function renderLobby() {
-    if (!ui.list) return;
-    ui.list.innerHTML = '';
-    ui.list.appendChild(el('div', 'color:#37e0cf;font-weight:600;margin-bottom:4px;', 'Room ' + (Net.code || '') + '  (' + Net.players.length + '/' + Net.max + ')'));
-    Net.players.forEach(function (p) {
-      var line = (p.host ? 'HOST ' : '     ') + '[' + p.slot + '] ' + p.name + (p.ready ? '  ready' : '');
-      ui.list.appendChild(el('div', 'color:' + (p.slot === Net.slot ? '#fff' : '#b9b1d0') + ';', line));
-    });
-  }
-  function showLobbyControls() {
-    if (!ui.ready) return;
-    ui.chatLog.style.display = ui.chatIn.style.display = 'block';
-    ui.ready.style.display = 'inline-block';
-    ui.start.style.display = (Net.role === 'host') ? 'inline-block' : 'none';
-    ui.sub.textContent = (Net.role === 'host') ? 'You are host. Start when ready.' : 'Waiting for host to start.';
-  }
-  function chatLine(t) { if (!ui.chatLog) return; var d = el('div', '', t); ui.chatLog.appendChild(d); ui.chatLog.scrollTop = ui.chatLog.scrollHeight; }
-
-  /* ---- match handshake: reload into the shared seeded world ---- */
-  function beginMatch(seed) {
-    var host = (Net.role === 'host') ? 1 : 0;
-    var url = location.pathname + '?seed=' + (seed >>> 0) + '&mp=' + encodeURIComponent(Net.code) + '&slot=' + Net.slot + '&host=' + host;
-    location.href = url; // head seed reader rebuilds identical terrain; we auto-reconnect on load
-  }
-
-  function banner(txt) {
-    var b = document.getElementById('dusk-mp-banner') || el('div', 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9500;background:#181026cc;border:1px solid #37e0cf55;color:#cfeee9;padding:6px 12px;border-radius:8px;font:600 12px system-ui;');
-    b.id = 'dusk-mp-banner'; b.textContent = txt; if (!b.parentNode) document.body.appendChild(b);
-  }
-
-  /* ---- launcher button + auto-reconnect ---- */
-  function addLauncher() {
-    if (document.getElementById('dusk-mp-btn')) return;
-    var b = el('button', 'position:fixed;top:10px;right:12px;z-index:8000;padding:8px 12px;border:1px solid #37e0cf66;border-radius:8px;background:#181026cc;color:#37e0cf;font:600 12px system-ui;cursor:pointer;', 'Multiplayer');
-    b.id = 'dusk-mp-btn'; b.onclick = openLobby; document.body.appendChild(b);
-  }
-
-  function autoReconnect() {
-    var q; try { q = new URLSearchParams(location.search); } catch (e) { return; }
-    var code = q.get('mp'); if (!code) return;
-    Net.active = true; Net.slot = +(q.get('slot') || 0); Net.role = (q.get('host') === '1') ? 'host' : 'client';
-    Net.seed = (q.get('seed') >>> 0);
-    banner('MP room ' + code.toUpperCase() + '  slot ' + Net.slot + '  (' + Net.role + ')');
-    if (CFG) connect(code.toUpperCase(), Net.seed, null, false);
-    // NOTE: live battle sync (orders in, snapshots out) attaches here via
-    // Net.onOrder / Net.onSnap / Net.sendOrder once validated against the
-    // deployed worker. Presence, chat and the shared seeded map work now.
-  }
-
-  function boot() { addLauncher(); autoReconnect(); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-})();
 
 /* ============================ START / END ============================ */
 function endGame(win){

@@ -213,12 +213,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 'use strict';
 /* ============================ CONFIG ============================ */
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-const HALF = 210;                  // world spans -210..210 (expansive open field)
-const SHORE = 148;                 // base eastern shoreline x
-let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
-(function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
-  try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
-  if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
+const HALF = 150;                  // world spans -150..150
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
 const TEAM_COL = [0x37e0cf, 0xff5148];
@@ -301,12 +296,10 @@ const FLATS=[
   {x:0,z:12,r:12},{x:-18,z:-14,r:12},                // centre rich
   {x:-52,z:-58,r:10},{x:52,z:58,r:10},{x:-4,z:70,r:10},{x:4,z:-72,r:10}
 ];
-function shoreX(z){return SHORE+Math.sin((z+WSZ)*0.05)*10+Math.sin((z+WSZ)*0.017)*6;}
+function shoreX(z){return 122+Math.sin(z*0.05)*8;}
 function isWater(x,z){return x>shoreX(z);}
 function groundH(x,z){
-  const sx=x+WSX, sz=z+WSZ;
-  let ridge = Math.pow(vnoise(sx*0.012+5, sz*0.012+9), 2.3)*10;   // occasional highlands / rock
-  let h = vnoise(sx*0.035+31,sz*0.035+7)*5.2 + vnoise(sx*0.11,sz*0.11)*1.2 + ridge - 3.6;
+  let h = vnoise(x*0.035+31,z*0.035+7)*5.2 + vnoise(x*0.11,z*0.11)*1.2 - 2.8;
   let f=0;
   for(const p of FLATS){const dd=Math.sqrt(d2(x,z,p.x,p.z)); if(dd<p.r+9) f=Math.max(f, 1-Math.max(0,dd-p.r)/9);}
   let g = lerp(h, 0.15, f);
@@ -392,24 +385,11 @@ function buildTerrainGeo(){
 {
   const geo=buildTerrainGeo();
   const cols=[]; const pos=geo.attributes.position;
-  const C_DEEP =new THREE.Color(0x1a4a63), C_SHALLOW=new THREE.Color(0x2f86a4),
-        C_SAND =new THREE.Color(0xc7b077), C_GRASS=new THREE.Color(0x62842f),
-        C_DIRT =new THREE.Color(0x8f6a3e), C_FOREST=new THREE.Color(0x395a26),
-        C_ROCK =new THREE.Color(0x817a8c), C_PEAK =new THREE.Color(0xb1abb8);
-  const tmp=new THREE.Color();
+  const cA=new THREE.Color(0x4a3350), cB=new THREE.Color(0x6b4a45), cC=new THREE.Color(0x2e2338);
   for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i), h=pos.getY(i);
-    const m=vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80);          // moisture 0..1
-    const sh=shoreX(z), nearShore = x>sh-22;
-    let c;
-    if(h < -1.6){ c=tmp.copy(C_DEEP).lerp(C_SHALLOW, clamp((h+4)/2.4,0,1)); }
-    else if(nearShore && h < 0.9){ c=tmp.copy(C_SAND); }         // beach band
-    else if(h > 8.2){ c=tmp.copy(C_PEAK); }                      // bare peaks
-    else if(h > 4.6){ c=tmp.copy(C_ROCK).lerp(m>0.5?C_FOREST:C_DIRT, 0.35); } // highland flanks
-    else if(m > 0.63 && h > 1.1){ c=tmp.copy(C_FOREST); }        // moist upland forest
-    else { c=tmp.copy(m>0.47?C_GRASS:C_DIRT); }                  // lowland grass/steppe
-    const dith = 0.90 + vnoise(x*0.5+3,z*0.5+9)*0.16;            // subtle per-vertex shade
-    cols.push(c.r*dith, c.g*dith, c.b*dith);
+    const h=pos.getY(i), n=vnoise(pos.getX(i)*0.25, pos.getZ(i)*0.25);
+    const c=cC.clone().lerp(cA,clamp((h+3)/6,0,1)).lerp(cB,n*0.4);
+    cols.push(c.r,c.g,c.b);
   }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
   const ter=new THREE.Mesh(geo, new THREE.MeshStandardMaterial({vertexColors:true, metalness:0.0, roughness:0.97}));
@@ -417,11 +397,10 @@ function buildTerrainGeo(){
 }
 /* eastern sea */
 {
-  const seaStart=SHORE-16;
-  const w=TSIZE/2-seaStart;
+  const w=TSIZE/2-108;
   const sea=new THREE.Mesh(new THREE.PlaneGeometry(w,TSIZE),
     new THREE.MeshStandardMaterial({color:new THREE.Color(0x1c5468).convertSRGBToLinear(), transparent:true, opacity:0.9, metalness:0.18, roughness:0.15, envMapIntensity:1.7}));
-  sea.rotation.x=-Math.PI/2; sea.position.set(seaStart+w/2, 0.12, 0);
+  sea.rotation.x=-Math.PI/2; sea.position.set(108+w/2, 0.1, 0);
   scene.add(sea);
 }
 
@@ -431,17 +410,15 @@ function buildTerrainGeo(){
   const trunkGeo=new THREE.CylinderGeometry(0.28,0.36,1.6,5);
   const tMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x1e3a34).convertSRGBToLinear(), metalness:0.0, roughness:0.82});
   const kMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x3a2a28).convertSRGBToLinear(), metalness:0.0, roughness:0.86});
-  const N=IS_TOUCH?300:460;
+  const N=IS_TOUCH?190:260;
   const tI=new THREE.InstancedMesh(treeGeo,tMat,N), kI=new THREE.InstancedMesh(trunkGeo,kMat,N);
   tI.castShadow=kI.castShadow=true;
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
   let n=0, guard=0;
-  while(n<N && guard++<16000){
+  while(n<N && guard++<9000){
     const x=rand(-HALF+4,HALF-4), z=rand(-HALF+4,HALF-4);
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+5)*(f.r+5)){ok=false;break;} }
-    const gh=groundH(x,z);
-    if(!ok || x>shoreX(z)-7 || gh<0.6 || gh>7.6) continue;
-    if(vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80)<0.58) continue;  // moist forest zones only
+    if(!ok || x>shoreX(z)-7 || vnoise(x*0.06,z*0.06)<0.55) continue;
     const h=groundH(x,z), sc=rand(0.8,1.5);
     s.set(sc,sc,sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
     p.set(x,h+2.3*sc,z); m.compose(p,q,s); tI.setMatrixAt(n,m);
@@ -452,13 +429,12 @@ function buildTerrainGeo(){
 
   const rockGeo=new THREE.DodecahedronGeometry(1.1,0);
   const rMat=new THREE.MeshStandardMaterial({color:new THREE.Color(0x574a5c).convertSRGBToLinear(), metalness:0.06, roughness:0.8});
-  const R=IS_TOUCH?110:170, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
+  const R=IS_TOUCH?60:90, rI=new THREE.InstancedMesh(rockGeo,rMat,R);
   rI.castShadow=true; let rn=0; guard=0;
-  while(rn<R && guard++<9000){
+  while(rn<R && guard++<4000){
     const x=rand(-HALF+3,HALF-3), z=rand(-HALF+3,HALF-3);
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+3)*(f.r+3)){ok=false;break;} }
     if(!ok || x>shoreX(z)-5) continue;
-    if(groundH(x,z)<3.2 && Math.random()<0.7) continue;   // cluster on highlands
     const sc=rand(0.5,1.8);
     s.set(sc,sc*rand(0.6,1),sc); q.setFromEuler(new THREE.Euler(rand(0,3),rand(0,3),rand(0,3)));
     p.set(x,groundH(x,z)+0.3,z); m.compose(p,q,s); rI.setMatrixAt(rn,m); rn++;
