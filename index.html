@@ -1962,7 +1962,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 			this.nodeNamesUsed = {}; // Use an THREE.ImageBitmapLoader if imageBitmaps are supported. Moves much of the
 			// expensive work of uploading a texture to the GPU off the main thread.
 
-			if ( typeof createImageBitmap !== 'undefined' && /Firefox/.test( navigator.userAgent ) === false ) {
+			if ( false ) { // ImageBitmapLoader disabled: iOS Safari createImageBitmap breaks glTF textures
 
 				this.textureLoader = new THREE.ImageBitmapLoader( this.options.manager );
 
