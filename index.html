@@ -3465,32 +3465,10 @@ aiTick=function(dt){
   /* painted team colour that multiplies the baked AO in COLOR_0 */
   var PAINT={};
   function hash3(x,y,z){var s=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453;return s-Math.floor(s);}
-  var MTEX={};
   function tintAO(g,team,spec){
     spec=spec||{};
     var TC=(typeof TEAM_COL!=='undefined'&&TEAM_COL)?TEAM_COL:null;
     var raw=TC?TC[team]:(team?0xff5148:0x37e0cf);
-    /* textured GLBs: keep PBR maps, apply a team tint to cloned materials */
-    var hasMap=false;
-    g.traverse(function(o){if(o.isMesh&&o.material&&o.material.map)hasMap=true;});
-    if(hasMap){
-      var tint=new THREE.Color(raw), eT=(spec.env==null?0.85:spec.env); /* match pMat ambient fill */
-      g.traverse(function(o){
-        if(!o.isMesh||!o.material)return;
-        var src=o.material,k=src.uuid+'|'+team;
-        if(!MTEX[k]){
-          var m=src.clone();
-          m.color=new THREE.Color(1.18,1.30,1.52).lerp(tint,0.18); /* brighten + cool-compensate 0xffb070 sun */
-          m.metalness=Math.min(m.metalness||0,0.55);
-          m.roughness=Math.max(m.roughness||1,0.55);
-          if(typeof getEnv==='function'){m.envMap=getEnv();m.envMapIntensity=eT;}
-          m.needsUpdate=true; MTEX[k]=m;
-        }
-        o.material=MTEX[k];
-        o.castShadow=true; o.receiveShadow=true; o.userData.__gltf=true;
-      });
-      return;
-    }
     var base=new THREE.Color(raw),hsl={};base.getHSL(hsl);
     /* lift saturation so even muted team colours read as painted, keep a mid value */
     base.setHSL(hsl.h, Math.min(0.82,hsl.s*1.8+0.30), Math.min(0.55,Math.max(0.42,hsl.l)));
@@ -3564,17 +3542,8 @@ aiTick=function(dt){
     m.rotation.x=-Math.PI/2; m.position.y=0.06; m.renderOrder=1; g.add(m);
   }
 
-  function boneBox(root){
-    let has=false; const b=new THREE.Box3(); const v=new THREE.Vector3();
-    root.updateMatrixWorld(true);
-    root.traverse(o=>{if(o.isBone){has=true; o.getWorldPosition(v); b.expandByPoint(v);}});
-    return has?b:null;
-  }
   function normalise(root, spec, type){
-    /* skinned exports carry armature scale the geometry bbox misses; measure bones instead */
-    const sb0=boneBox(root);
-    let box=sb0||new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
-    if(sb0) size.y*=1.12;   /* bones span ankle-to-skull; pad to true height */
+    let box=new THREE.Box3().setFromObject(root); const size=new THREE.Vector3(); box.getSize(size);
     let s;
     if(spec.build){
       const foot=((window.BDEF&&BDEF[type])?BDEF[type].size:8)*(spec.footFrac||0.94);
@@ -3583,9 +3552,9 @@ aiTick=function(dt){
       s=(spec.targetH||2.2)/(size.y||1);
     }
     root.scale.setScalar(s*(spec.scale||1));
-    box=boneBox(root)||new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
+    box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c);
     root.position.x-=c.x; root.position.z-=c.z; root.position.y-=box.min.y;
-    box=boneBox(root)||new THREE.Box3().setFromObject(root); box.getSize(size);
+    box=new THREE.Box3().setFromObject(root); box.getSize(size);
     let yaw=spec.yaw;
     if(yaw==null && spec.autoYaw!==false) yaw=(size.x>size.z*1.15)?Math.PI/2:0;
     if(yaw) root.rotation.y=yaw;
@@ -3601,7 +3570,7 @@ aiTick=function(dt){
       loader.load(MODELS[t].url, g=>{const sc=g.scene||g.scenes[0];
         var _lts=[]; sc.traverse(function(o){if(o.isLight)_lts.push(o);}); _lts.forEach(function(l){l.parent&&l.parent.remove(l);});
         if(MODELS[t].prep){try{MODELS[t].prep(sc);}catch(e){console.warn('[gltf] prep',t,e&&e.message);}}
-        CACHE[t]={tmpl:sc, skinned:isSkinned(sc), anims:(g.animations||[])}; res();},
+        CACHE[t]={tmpl:sc, skinned:isSkinned(sc)}; res();},
         undefined, err=>{console.warn('[gltf] load failed',t,err&&err.message); res();});
     })))).catch(e=>console.warn('[gltf] init failed', e&&e.message));
   };
@@ -3613,10 +3582,8 @@ aiTick=function(dt){
     const hit=CACHE[type]; const spec=MODELS[type]||{};
     if(!hit||spec.build) return _mkUnit(type,team);
     const inst=(hit.skinned&&THREE.SkeletonUtils)?THREE.SkeletonUtils.clone(hit.tmpl):hit.tmpl.clone(true);
-    if(hit.skinned)inst.traverse(o=>{if(o.isSkinnedMesh)o.frustumCulled=false;});
     normalise(inst,spec,type);
     const g=new THREE.Group(); g.add(inst);
-    if(hit.anims&&hit.anims.length)g.userData.anims=hit.anims;
     if(spec.turret){const tn=inst.getObjectByName(spec.turret); if(tn) g.userData.turret=tn;}
     g.userData.gltf=true; g.userData.inst=inst;
     if(spec.dress){try{spec.dress(g,team,spec);}catch(e){console.warn('[gltf] dress',type,e&&e.message);}}
@@ -3637,18 +3604,18 @@ aiTick=function(dt){
   };
 
   /* ===== UNITS (Meshy geometry, decimated, baked AO, team-tinted) ===== */
-  MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, yaw:Math.PI, dress:tintAO };
-  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, yaw:Math.PI, dress:tintAO };
-  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, yaw:Math.PI, dress:tintAO };
-  MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, yaw:Math.PI, dress:tintAO };
-  MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, yaw:Math.PI, dress:tintAO };
-  MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.rifleman  = { url:'assets/models/rifleman.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
-  MODELS.rocketeer = { url:'assets/models/rocketeer.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
+  MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO };
+  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, dress:tintAO };
+  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, dress:tintAO };
+  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, dress:tintAO };
+  MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, dress:tintAO };
+  MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO };
+  MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO };
+  MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO };
+  MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, dress:tintAO };
+  MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO };
+  MODELS.rifleman  = { url:'assets/models/infantry.glb', targetH:1.9, draco:true, dress:tintAO };
+  MODELS.rocketeer = { url:'assets/models/infantry.glb', targetH:1.9, draco:true, dress:tintAO };
 
   /* ===== BUILDINGS (scaled to BDEF footprint) ===== */
   MODELS.conyard   = { url:'assets/models/conyard.glb',   build:true, draco:true, dress:tintAO };
@@ -3896,18 +3863,6 @@ aiTick=function(dt){
       e._ax=e.pos.x; e._az=e.pos.z;
       const moving=sp>0.4&&!e.dead;
       if(e._by==null)e._by=inst.position.y;          /* normalise() ground offset */
-      /* skeletal clip path: rigged models play their walk cycle, no procedural bob */
-      if(m.userData.anims&&m.userData.anims.length&&window.THREE&&THREE.AnimationMixer){
-        if(!e._mix){
-          e._mix=new THREE.AnimationMixer(inst);
-          e._act=e._mix.clipAction(m.userData.anims[0]);
-          e._act.play(); e._act.paused=true;
-        }
-        if(moving){e._act.paused=false; e._mix.update(dt*Math.min(Math.max(sp/7,0.7),1.6));}
-        else if(!e._act.paused){e._act.paused=true; e._act.time=0; e._mix.update(0);}
-        inst.position.y=e._by; inst.rotation.z=0; inst.rotation.x=0;
-        continue;
-      }
       e._wt=(e._wt==null?Math.random()*6:e._wt)+dt*(moving?Math.min(sp,12):0);
       if(def.armor==='inf'){
         inst.position.y=e._by+(moving?Math.abs(Math.sin(e._wt*7.5))*0.11:0);
