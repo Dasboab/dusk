@@ -3474,13 +3474,13 @@ aiTick=function(dt){
     var hasMap=false;
     g.traverse(function(o){if(o.isMesh&&o.material&&o.material.map)hasMap=true;});
     if(hasMap){
-      var tint=new THREE.Color(raw), eT=(spec.env==null?DEFAULT_ENV:spec.env);
+      var tint=new THREE.Color(raw), eT=(spec.env==null?0.85:spec.env); /* match pMat ambient fill */
       g.traverse(function(o){
         if(!o.isMesh||!o.material)return;
         var src=o.material,k=src.uuid+'|'+team;
         if(!MTEX[k]){
           var m=src.clone();
-          m.color=new THREE.Color(0xffffff).lerp(tint,0.30);
+          m.color=new THREE.Color(1.18,1.30,1.52).lerp(tint,0.18); /* brighten + cool-compensate 0xffb070 sun */
           m.metalness=Math.min(m.metalness||0,0.55);
           m.roughness=Math.max(m.roughness||1,0.55);
           if(typeof getEnv==='function'){m.envMap=getEnv();m.envMapIntensity=eT;}
@@ -3638,14 +3638,14 @@ aiTick=function(dt){
 
   /* ===== UNITS (Meshy geometry, decimated, baked AO, team-tinted) ===== */
   MODELS.tank      = { url:'assets/models/tank.glb',      targetH:2.4, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, dress:tintAO };
-  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, dress:tintAO };
-  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, dress:tintAO };
-  MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, dress:tintAO };
+  MODELS.heavy     = { url:'assets/models/heavy.glb',     targetH:2.7, draco:true, yaw:Math.PI, dress:tintAO };
+  MODELS.apc       = { url:'assets/models/apc.glb',       targetH:2.4, draco:true, yaw:Math.PI, dress:tintAO };
+  MODELS.harvester = { url:'assets/models/harvester.glb', targetH:2.8, draco:true, yaw:Math.PI, dress:tintAO };
+  MODELS.mlrs      = { url:'assets/models/mlrs.glb',      targetH:2.6, draco:true, yaw:Math.PI, dress:tintAO };
   MODELS.gunboat   = { url:'assets/models/gunboat.glb',   targetH:2.2, draco:true, dress:tintAO , yaw:Math.PI };
   MODELS.corvette  = { url:'assets/models/corvette.glb',  targetH:2.9, draco:true, dress:tintAO , yaw:Math.PI };
   MODELS.dogbot    = { url:'assets/models/dogbot.glb',    targetH:1.8, draco:true, dress:tintAO , yaw:Math.PI };
-  MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, dress:tintAO };
+  MODELS.mobilehq    = { url:'assets/models/mobilehq.glb',    targetH:2.8, draco:true, yaw:Math.PI, dress:tintAO };
   MODELS.landingcraft= { url:'assets/models/landingcraft.glb',targetH:2.6, draco:true, dress:tintAO , yaw:Math.PI };
   MODELS.rifleman  = { url:'assets/models/rifleman.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
   MODELS.rocketeer = { url:'assets/models/rocketeer.glb', targetH:1.9, yaw:Math.PI, draco:true, dress:tintAO };
