@@ -3857,15 +3857,15 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 'use strict';
 /* ============================ CONFIG ============================ */
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-const HALF = 210;                  // world spans -210..210 (expansive open field)
-const SHORE = 148;                 // base eastern shoreline x
+const HALF = 630;                  // world spans -630..630 (3x linear, 9x area)
+const SHORE = 444;                 // base eastern shoreline x
 let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
 (function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
   try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
   if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
-const TEAM_COL = [0x4169e1, 0xff5148];
+const TEAM_COL = [0x4169e1, 0xff5148, 0x8bc34a, 0xb64df0];
 
 const MULT = {
   bullet:{inf:1.00, veh:0.25, bld:0.18},
@@ -3915,14 +3915,17 @@ const XP_LEVELS = [40, 130];
 /* ============================ STATE ============================ */
 const G = {
   running:false, over:false, t:0,
-  credits:[6000, 7500],
+  credits:[6000, 7500, 7500, 7500],
   ents:[], ore:[], projectiles:[], particles:[],
   selected:[], squads:[[],[],[]],
   prodStruct:null, queues:{barracks:[], factory:[], navalyard:[]},
   placing:null, pendingCmd:null,
-  ai:{prodTimer:6, waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99},
+  ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:315,z:-420}},
+       {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:300,z:330}},
+       {prodTimer:16, waveTimer:300, wave:0, comp:4, defendCd:0, provoked:-99, home:{x:-330,z:-330}}],
   muted:false, lowPowerMsg:0, lastSight:-99
 };
+G.ai=G.ais[0];
 let EID = 1;
 
 /* ============================ UTILS ============================ */
@@ -3938,15 +3941,33 @@ function vnoise(x,z){
   return lerp(lerp(hash(xi,zi),hash(xi+1,zi),u), lerp(hash(xi,zi+1),hash(xi+1,zi+1),u), v);
 }
 const FLATS=[
-  {x:-105,z:105,r:30},{x:105,z:-105,r:34},          // bases
-  {x:14,z:-34,r:15},                                 // enemy forward outpost
-  {x:-78,z:92,r:10},{x:-112,z:66,r:10},              // player ore
-  {x:78,z:-92,r:10},{x:112,z:-66,r:10},              // enemy ore
-  {x:0,z:12,r:12},{x:-18,z:-14,r:12},                // centre rich
-  {x:-52,z:-58,r:10},{x:52,z:58,r:10},{x:-4,z:70,r:10},{x:4,z:-72,r:10}
+  {x:-315,z:315,r:34},                                        // player base
+  {x:315,z:-420,r:36},{x:300,z:330,r:36},{x:-330,z:-330,r:36},// faction bases
+  {x:40,z:-100,r:16},{x:90,z:180,r:16},{x:-160,z:-60,r:16},   // forward outposts
+  {x:-255,z:285,r:10},{x:-345,z:225,r:10},{x:-282,z:360,r:10},
+  {x:240,z:-360,r:10},{x:345,z:-330,r:10},{x:390,z:-435,r:10},
+  {x:225,z:300,r:10},{x:345,z:255,r:10},{x:375,z:375,r:10},
+  {x:-240,z:-300,r:10},{x:-390,z:-255,r:10},{x:-300,z:-420,r:10},
+  {x:0,z:30,r:13},{x:-45,z:-30,r:13},{x:45,z:-15,r:12},
+  {x:-150,z:150,r:10},{x:150,z:-150,r:10},{x:-120,z:-90,r:10},{x:120,z:120,r:10},
+  {x:30,z:210,r:10},{x:-30,z:-210,r:10},{x:180,z:60,r:10},{x:-180,z:30,r:10},
+  {x:-60,z:120,r:9},{x:60,z:-120,r:9},{x:240,z:-60,r:9},{x:-240,z:90,r:9},
+  {x:90,z:-270,r:9},{x:-90,z:300,r:9}
 ];
 function shoreX(z){return SHORE+Math.sin((z+WSZ)*0.05)*10+Math.sin((z+WSZ)*0.017)*6;}
-function isWater(x,z){return x>shoreX(z);}
+const ISLES=[{x:500,z:-380,r:38,s:1.7},{x:530,z:80,r:52,s:4.1},
+             {x:480,z:330,r:30,s:0.6},{x:560,z:-120,r:24,s:2.9}];
+function isleD(x,z){
+  let m=-1e3;
+  for(const I of ISLES){
+    const dx=x-I.x,dz=z-I.z,d=Math.sqrt(dx*dx+dz*dz);
+    if(d>I.r+40)continue;
+    const re=I.r*(1+0.18*Math.sin(3*Math.atan2(dz,dx)+I.s));
+    const v=re-d;if(v>m)m=v;
+  }
+  return m;
+}
+function isWater(x,z){return x>shoreX(z)&&isleD(x,z)<0;}
 function fbm(x,z){let a=0,amp=0.52,f=1;for(let o=0;o<5;o++){a+=vnoise(x*f,z*f)*amp;f*=2.03;amp*=0.5;}return a;}
 function groundH(x,z){
   const sx=x+WSX, sz=z+WSZ;
@@ -3968,6 +3989,14 @@ function groundH(x,z){
   let g = lerp(h, 0.15, f);
   const sw=x-shoreX(z);
   if(sw>-9){const t=clamp((sw+9)/14,0,1); g=lerp(g,-3.0,t*t);}   // gentle beach ramp into the sea
+  if(sw>-12){                                                    // islands rise out of the sea
+    const iD=isleD(x,z);
+    if(iD>-10){
+      const t=clamp((iD+4)/10,0,1);
+      const ih=lerp(-3.0, 1.4+Math.max(0,iD)*0.10+(fbm(sx*0.05,sz*0.05)-0.5)*1.6, t*t);
+      if(ih>g)g=ih;
+    }
+  }
   return g;
 }
 function screenPos(v3, out){
@@ -4023,7 +4052,7 @@ scene.add(sun);
 /* terrain */
 let terrainGeoParams;
 function buildTerrainGeo(){
-  const seg=IS_TOUCH?128:170;
+  const seg=IS_TOUCH?200:288;
   const geo=new THREE.PlaneGeometry(TSIZE,TSIZE,seg,seg);
   geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position;
@@ -4278,7 +4307,7 @@ function propBlocked(x,z,pad){
 }
 function buildModelProps(treeSets,rockSets){
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
-  const N=IS_TOUCH?300:460, R=IS_TOUCH?180:280;
+  const N=IS_TOUCH?700:1100, R=IS_TOUCH?560:620;
   const cap=v=>Math.ceil((v===treeSets?N:R)/5)+40;
   const mk=sets=>sets.map(parts=>{
     const ims=parts.map(pt=>{const im=new THREE.InstancedMesh(pt.geo,pt.mat,cap(sets));im.castShadow=true;im.count=0;scene.add(im);return im;});
@@ -4417,7 +4446,7 @@ function spawnOreField(cx,cz,count,rich){
 }
 
 /* ============================ FOG OF WAR ============================ */
-const FOGN=96, FC=256;
+const FOGN=160, FC=256;
 const fog={
   explored:new Uint8Array(FOGN*FOGN), visible:new Uint8Array(FOGN*FOGN),
   exploredCount:0, done:false, timer:0
@@ -4546,7 +4575,7 @@ function entityAt(cx,cy,teamFilter){
   for(const e of G.ents){
     if(e.dead) continue;
     if(teamFilter!==undefined && e.team!==teamFilter) continue;
-    if(e.team===1 && !e.mesh.visible) continue;
+    if(e.team!==0 && !e.mesh.visible) continue;
     const sp=screenPos(e.pos,tmpV);
     if(sp.z>1) continue;
     const px=Math.max(18,(e.cat==='b'?e.def.size*2.2:e.def.r*7)*(70/cam.dist)*10);
@@ -5352,7 +5381,7 @@ function spawnUnit(type,x,z,team){
     pos:mesh.position,mesh,dead:false,xp:0,rank:0,cd:0,target:null,dest:null,
     order:{mode:'idle'},noAcq:false,engFrom:null,squad:null,animT:rand(0,9),
     cargo:0,oreTgt:null,manual:false,cargoUnits:type==='apc'?[]:null,seen:false,scoutT:0};
-  if(team===1)mesh.visible=false;
+  if(team!==0)mesh.visible=false;
   makeBar(e);makeRing(e);G.ents.push(e);
   return e;
 }
@@ -5363,7 +5392,7 @@ function spawnBuilding(type,x,z,team,announceIt){
   const e={id:EID++,type,cat:'b',def,team,hp:def.hp,maxhp:def.hp,r:def.size*0.55,sight:def.sight,
     pos:mesh.position,mesh,dead:false,xp:0,rank:0,cd:rand(0,1),target:null,
     faceZ:team===0?-1:1,rally:null,rallyMk:null,seen:false};
-  if(team===1)mesh.visible=false;
+  if(team!==0)mesh.visible=false;
   makeBar(e);makeRing(e);G.ents.push(e);
   if(announceIt)announce(def.name+' constructed');
   refreshSidebar&&refreshSidebar();
@@ -5644,10 +5673,10 @@ function applyDamage(t,raw,wtype,attacker){
   let dmg=raw*(MULT[wtype]?MULT[wtype][cat]:1);
   if(attacker&&attacker.rank)dmg*=1+attacker.rank*0.15;
   t.hp-=dmg;drawBar(t);
-  if(t.team===1){
-    G.ai.provoked=G.t;
-    if(attacker){G.ai.threatX=attacker.pos.x;G.ai.threatZ=attacker.pos.z;}
-  }else if(attacker&&attacker.team===1){
+  if(t.team>=1&&G.ais[t.team-1]){
+    const A=G.ais[t.team-1];A.provoked=G.t;
+    if(attacker){A.threatX=attacker.pos.x;A.threatZ=attacker.pos.z;}
+  }else if(t.team===0&&attacker&&attacker.team!==0){
     if(G.t-(G.warnT||-99)>9){
       G.warnT=G.t;
       announce(t.cat==='b'?'Base under attack':'Forces under attack');
@@ -5684,15 +5713,33 @@ function killEnt(e){
   G.selected=G.selected.filter(s=>s!==e);
   for(let i=0;i<3;i++)G.squads[i]=G.squads[i].filter(u=>u!==e);
   updateCmdbar();refreshSquadUI();
-  if(e.type==='conyard')endGame(e.team===1);
+  if(e.type==='mobilehq'&&e.team===0&&
+     !G.ents.some(o=>!o.dead&&o!==e&&o.team===0&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
+  if(e.type==='conyard'){
+    if(e.team===0&&!G.ents.some(o=>!o.dead&&o!==e&&o.team===0&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
+    else if(!G.ents.some(o=>!o.dead&&o!==e&&o.type==='conyard'&&o.team!==0))endGame(true);
+    else announce('Enemy faction eliminated');
+  }
   if(e.team===0&&e.cat==='b'){refreshSidebar();announce(e.def.name+' destroyed');}
 }
 
 /* ============================ UNIT / BUILDING AI ============================ */
 function moveUnit(u,dt){
   if(!u.dest)return true;
-  if(u.def.domain==='sea'){const sx2=shoreX(u.dest.z)+2.5;if(u.dest.x<sx2)u.dest.x=sx2;}
-  else if(u.def.domain!=='air'&&isWater(u.dest.x,u.dest.z)){const sx2=shoreX(u.dest.z)-1.5;if(u.dest.x>sx2)u.dest.x=sx2;}
+  if(u.def.domain!=='air'){
+    const sea=u.def.domain==='sea';
+    if(isWater(u.dest.x,u.dest.z)!==sea){
+      const dx=u.pos.x-u.dest.x,dz=u.pos.z-u.dest.z;
+      let ok=false;
+      for(let k9=1;k9<=24;k9++){
+        const t=k9/24,px=u.dest.x+dx*t,pz=u.dest.z+dz*t;
+        if(isWater(px,pz)===sea){
+          u.dest.x=px+dx*0.03;u.dest.z=pz+dz*0.03;ok=true;break;
+        }
+      }
+      if(!ok){u.dest.x=u.pos.x;u.dest.z=u.pos.z;}
+    }
+  }
   let dx=u.dest.x-u.pos.x,dz=u.dest.z-u.pos.z;
   const dist=Math.hypot(dx,dz);
   if(dist<1.1){u.dest=null;return true;}
@@ -5849,7 +5896,7 @@ function updateUnit(u,dt){
     if(u.dest)moveUnit(u,dt);
   }else if(m==='move'||m==='amove'){
     if(moveUnit(u,dt)){
-      if(u.team===1){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};}
+      if(u.team!==0){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};}
       else{u.order={mode:'idle'};u.engFrom=null;if(u.type==='harvester'){u.manual=false;u.state='idle';}}
     }
   }else{
@@ -6187,29 +6234,28 @@ function refreshSidebar(){
 
 /* ============================ ENEMY AI ============================ */
 const AI_COMP=['rifleman','tank','rocketeer','tank','apc','rifleman','heavy','tank','mlrs'];
-function aiTick(dt){
-  const ai=G.ai;
-  G.credits[1]+=10*dt;
+function aiTickTeam(ai,team,dt){
+  G.credits[team]+=10*dt;
   ai.prodTimer-=dt;
   if(ai.prodTimer<=0){
     ai.prodTimer=rand(8,13);
     const type=AI_COMP[ai.comp%AI_COMP.length];
     const d=UDEF[type];
-    const prod=G.ents.find(e=>!e.dead&&e.team===1&&e.type===d.from);
-    if(prod&&G.credits[1]>=d.cost){
-      G.credits[1]-=d.cost;ai.comp++;
-      const u=spawnUnit(type,prod.pos.x+rand(-2,2),prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5),1);
-      u.order={mode:'guard',anchor:{x:105+rand(-14,14),z:-105+rand(-14,14)}};
+    const prod=G.ents.find(e=>!e.dead&&e.team===team&&e.type===d.from);
+    if(prod&&G.credits[team]>=d.cost){
+      G.credits[team]-=d.cost;ai.comp++;
+      const u=spawnUnit(type,prod.pos.x+rand(-2,2),prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5),team);
+      u.order={mode:'guard',anchor:{x:ai.home.x+rand(-16,16),z:ai.home.z+rand(-16,16)}};
     }
-    if(!G.ents.some(e=>!e.dead&&e.team===1&&e.type==='harvester')&&G.credits[1]>=1400){
-      const ref=G.ents.find(e=>!e.dead&&e.team===1&&e.type==='refinery');
-      if(ref){G.credits[1]-=1400;spawnUnit('harvester',ref.pos.x,ref.pos.z+3.5+ref.def.size*0.5,1);}
+    if(!G.ents.some(e=>!e.dead&&e.team===team&&e.type==='harvester')&&G.credits[team]>=1400){
+      const ref=G.ents.find(e=>!e.dead&&e.team===team&&e.type==='refinery');
+      if(ref){G.credits[team]-=1400;spawnUnit('harvester',ref.pos.x,ref.pos.z+3.5+ref.def.size*0.5,team);}
     }
   }
   ai.waveTimer-=dt;
   if(ai.waveTimer<=0){
-    ai.wave++;ai.waveTimer=Math.max(75,165-ai.wave*9);
-    const troops=G.ents.filter(e=>!e.dead&&e.team===1&&e.cat==='u'&&e.type!=='harvester'
+    ai.wave++;ai.waveTimer=Math.max(90,185-ai.wave*9)+team*12;
+    const troops=G.ents.filter(e=>!e.dead&&e.team===team&&e.cat==='u'&&e.type!=='harvester'
       &&(e.order.mode==='guard'||e.order.mode==='idle'));
     const sz=Math.min(troops.length,3+ai.wave);
     const cy=G.ents.find(e=>!e.dead&&e.team===0&&e.type==='conyard');
@@ -6220,16 +6266,20 @@ function aiTick(dt){
         u.target=null;u.engFrom=null;
       });
       announce('Hostile assault inbound');sfx.alert();
+      mmPing(cy.pos.x,cy.pos.z,'#ff5d5d');
     }else ai.waveTimer=30;
   }
   ai.defendCd-=dt;
   if(ai.defendCd<=0&&G.t-ai.provoked<6&&ai.threatX!==undefined){
     ai.defendCd=14;
-    const near=G.ents.filter(e=>!e.dead&&e.team===1&&e.cat==='u'&&e.type!=='harvester'
+    const near=G.ents.filter(e=>!e.dead&&e.team===team&&e.cat==='u'&&e.type!=='harvester'
       &&e.order.mode==='guard').sort((a,b)=>
       d2(a.pos.x,a.pos.z,ai.threatX,ai.threatZ)-d2(b.pos.x,b.pos.z,ai.threatX,ai.threatZ)).slice(0,3);
     for(const u of near){u.order={mode:'amove'};u.dest={x:ai.threatX+rand(-4,4),z:ai.threatZ+rand(-4,4)};}
   }
+}
+function aiTick(dt){
+  for(let i=0;i<G.ais.length;i++)aiTickTeam(G.ais[i],i+1,dt);
 }
 
 /* ============================ MINIMAP / MSG ============================ */
@@ -6255,11 +6305,13 @@ function drawMinimap(){
   mmCtx.fillStyle='#1a1428';mmCtx.fillRect(0,0,S,S);
   mmCtx.fillStyle='#173d4d';
   for(let py=0;py<S;py+=3){const wz=py/k-HALF;const sx=mx(shoreX(wz));mmCtx.fillRect(sx,py,S-sx+1,3);}
+  mmCtx.fillStyle='#2c3a24';
+  for(const I of ISLES){mmCtx.beginPath();mmCtx.arc(mx(I.x),mz(I.z),I.r*k,0,6.283);mmCtx.fill();}
   mmCtx.fillStyle='#ffb44a';
   for(const o of G.ore)if(o.amount>0&&fog.explored[cellIdx(o.x,o.z)])mmCtx.fillRect(mx(o.x)-1,mz(o.z)-1,2,2);
   for(const e of G.ents){
     if(e.dead)continue;
-    if(e.team===1&&!fog.visible[cellIdx(e.pos.x,e.pos.z)])continue;
+    if(e.team!==0&&!fog.visible[cellIdx(e.pos.x,e.pos.z)])continue;
     mmCtx.fillStyle=e.team===0?'#37e0cf':'#ff5148';
     const s=e.cat==='b'?4:2.5;
     mmCtx.fillRect(mx(e.pos.x)-s/2,mz(e.pos.z)-s/2,s,s);
@@ -6290,31 +6342,52 @@ function announce(txt){
 
 /* ============================ WORLD SETUP ============================ */
 function buildWorld(){
-  spawnOreField(-78,92,10,1);spawnOreField(-112,66,10,1);
-  spawnOreField(78,-92,10,1);spawnOreField(112,-66,10,1);
-  spawnOreField(0,12,13,1.5);spawnOreField(-18,-14,13,1.5);
-  spawnOreField(-52,-58,10,1.1);spawnOreField(52,58,10,1.1);
-  spawnOreField(-4,70,9,1);spawnOreField(4,-72,9,1);
-  spawnOreField(14,-34,9,1.2);
+  /* mainland ore */
+  spawnOreField(-255,285,11,1);spawnOreField(-345,225,11,1);spawnOreField(-282,360,10,1);
+  spawnOreField(240,-360,11,1);spawnOreField(345,-330,11,1);spawnOreField(390,-435,10,1);
+  spawnOreField(225,300,11,1);spawnOreField(345,255,10,1);spawnOreField(375,375,10,1);
+  spawnOreField(-240,-300,11,1);spawnOreField(-390,-255,10,1);spawnOreField(-300,-420,10,1);
+  spawnOreField(0,30,14,1.6);spawnOreField(-45,-30,14,1.6);spawnOreField(45,-15,12,1.4);
+  spawnOreField(-150,150,10,1.1);spawnOreField(150,-150,10,1.1);
+  spawnOreField(-120,-90,10,1);spawnOreField(120,120,10,1);
+  spawnOreField(30,210,10,1);spawnOreField(-30,-210,10,1);
+  spawnOreField(180,60,10,1.1);spawnOreField(-180,30,10,1.1);
+  spawnOreField(-60,120,9,1);spawnOreField(60,-120,9,1);
+  spawnOreField(240,-60,9,1);spawnOreField(-240,90,9,1);
+  spawnOreField(90,-270,9,1);spawnOreField(-90,300,9,1);
+  /* island riches: bring a Landing Craft */
+  spawnOreField(500,-380,10,2);spawnOreField(530,80,12,2);spawnOreField(480,330,8,1.8);
   /* player */
-  spawnBuilding('conyard',-105,105,0);
-  spawnUnit('rifleman',-99,111,0);spawnUnit('rifleman',-111,111,0);
-  /* enemy main base */
-  spawnBuilding('conyard',105,-105,1);
-  spawnBuilding('power',93,-115,1);spawnBuilding('power',119,-97,1);
-  spawnBuilding('refinery',93,-95,1);
-  spawnBuilding('barracks',119,-115,1);
-  spawnBuilding('factory',105,-123,1);
-  spawnBuilding('turret',89,-89,1);spawnBuilding('turret',107,-87,1);
-  spawnUnit('harvester',93,-88,1);
-  const gd=[['rifleman',96,-100],['rifleman',114,-104],['rocketeer',102,-96],['tank',110,-96],['tank',98,-110]];
-  for(const[t,x,z]of gd){const u=spawnUnit(t,x,z,1);u.order={mode:'guard',anchor:{x,z}};}
-  /* enemy forward outpost */
-  spawnBuilding('turret',12,-32,1);
-  spawnBuilding('power',20,-38,1);
-  const op=[['rifleman',9,-28],['rifleman',18,-29],['tank',14,-25]];
-  for(const[t,x,z]of op){const u=spawnUnit(t,x,z,1);u.order={mode:'guard',anchor:{x,z}};}
-  cam.x=-105;cam.z=105;
+  spawnBuilding('conyard',-315,315,0);
+  spawnUnit('rifleman',-309,321,0);spawnUnit('rifleman',-321,321,0);
+  /* enemy faction bases */
+  function enemyBase(team,bx,bz){
+    spawnBuilding('conyard',bx,bz,team);
+    spawnBuilding('power',bx-12,bz-10,team);spawnBuilding('power',bx+14,bz+8,team);
+    spawnBuilding('refinery',bx-12,bz+10,team);
+    spawnBuilding('barracks',bx+14,bz-10,team);
+    spawnBuilding('factory',bx,bz-18,team);
+    spawnBuilding('turret',bx-16,bz+16,team);spawnBuilding('turret',bx+2,bz+18,team);
+    spawnUnit('harvester',bx-12,bz+17,team);
+    const gd=[['rifleman',-9,5],['rifleman',9,1],['rocketeer',-3,9],['tank',5,9],['tank',-7,-5]];
+    for(const[t,ox,oz]of gd){
+      const u=spawnUnit(t,bx+ox,bz+oz,team);
+      u.order={mode:'guard',anchor:{x:bx+ox,z:bz+oz}};
+    }
+  }
+  enemyBase(1,315,-420);enemyBase(2,300,330);enemyBase(3,-330,-330);
+  /* forward outposts */
+  function outpost(team,ox,oz){
+    spawnBuilding('turret',ox,oz,team);
+    spawnBuilding('power',ox+8,oz-6,team);
+    const op=[['rifleman',-3,4],['rifleman',6,3],['tank',2,7]];
+    for(const[t,dx,dz]of op){
+      const u=spawnUnit(t,ox+dx,oz+dz,team);
+      u.order={mode:'guard',anchor:{x:ox+dx,z:oz+dz}};
+    }
+  }
+  outpost(1,40,-100);outpost(2,90,180);outpost(3,-160,-60);
+  cam.x=-315;cam.z=315;
   initSidebar();refreshSquadUI();
   updateFog();drawMinimap();
 }
@@ -6811,40 +6884,40 @@ buildWorld=function(){
   if(pcy){pcy.dead=true;scene.remove(pcy.mesh);G.ents=G.ents.filter(e=>e!==pcy);}
   addTerrainDressing();
   /* convoy */
-  const hq=spawnUnit('mobilehq',-76,72,0);
-  const e1=spawnUnit('apc',-82,78,0);
-  const e2=spawnUnit('rocketeer',-84,66,0);
-  [hq,e1,e2].forEach((u,i)=>{u.dest={x:-58+i*3,z:58-i*3};u.order={mode:i===0?'move':'amove'};});
+  const hq=spawnUnit('mobilehq',-286,282,0);
+  const e1=spawnUnit('apc',-292,288,0);
+  const e2=spawnUnit('rocketeer',-294,276,0);
+  [hq,e1,e2].forEach((u,i)=>{u.dest={x:-268+i*3,z:268-i*3};u.order={mode:i===0?'move':'amove'};});
   G.ents.filter(e=>!e.dead&&e.team===0&&e.type==='rifleman').forEach((u,i)=>{
-    u.pos.x=-88+i*4;u.pos.z=70-i*6;u.pos.y=groundH(u.pos.x,u.pos.z);
-    u.dest={x:-62+i*3,z:54+i*3};u.order={mode:'amove'};
+    u.pos.x=-298+i*4;u.pos.z=280-i*6;u.pos.y=groundH(u.pos.x,u.pos.z);
+    u.dest={x:-272+i*3,z:264+i*3};u.order={mode:'amove'};
   });
   /* naval escort waiting off the coast */
-  const boat=spawnUnit('gunboat',132,70,0);boat.dest={x:124,z:58};boat.order={mode:'guard',anchor:{x:124,z:58}};
-  const craft=spawnUnit('landingcraft',130,77,0);craft.dest={x:126,z:68};craft.order={mode:'guard',anchor:{x:126,z:68}};
+  const boat=spawnUnit('gunboat',468,300,0);boat.dest={x:462,z:292};boat.order={mode:'guard',anchor:{x:462,z:292}};
+  const craft=spawnUnit('landingcraft',464,314,0);craft.dest={x:460,z:306};craft.order={mode:'guard',anchor:{x:460,z:306}};
   /* richer, wider economy */
-  spawnOreField(118,52,12,1.25);spawnOreField(116,82,10,1.1);
-  spawnOreField(104,48,14,1.45);spawnOreField(90,66,10,1.2);spawnOreField(120,94,8,1.2);
-  spawnOreField(-32,88,12,1.1);spawnOreField(34,82,12,1.1);
-  spawnOreField(-96,-20,10,1.15);spawnOreField(94,-2,10,1.25);
+  spawnOreField(354,156,12,1.25);spawnOreField(348,246,10,1.1);
+  spawnOreField(312,144,14,1.45);spawnOreField(270,198,10,1.2);spawnOreField(360,282,8,1.2);
+  spawnOreField(-96,264,12,1.1);spawnOreField(102,246,12,1.1);
+  spawnOreField(-288,-60,10,1.15);spawnOreField(282,-6,10,1.25);
   /* enemy drone tech */
-  spawnBuilding('dronebay',119,-126,1);
-  spawnBuilding('robotics',126,-114,1);
+  spawnBuilding('dronebay',329,-441,1);
+  spawnBuilding('robotics',336,-429,1);
   /* enemy sea patrol */
-  const eb=spawnUnit('gunboat',140,26,1);eb.order={mode:'guard',anchor:{x:140,z:26}};
-  const ec=spawnUnit('corvette',148,-58,1);ec.order={mode:'guard',anchor:{x:148,z:-58}};
+  const eb=spawnUnit('gunboat',466,78,1);eb.order={mode:'guard',anchor:{x:466,z:78}};
+  const ec=spawnUnit('corvette',474,-174,1);ec.order={mode:'guard',anchor:{x:474,z:-174}};
   /* forward camps */
-  const camps=[{x:55,z:52},{x:-58,z:-70},{x:104,z:18}];
+  const camps=[{x:165,z:156,t:2},{x:-174,z:-210,t:3},{x:312,z:54,t:1}];
   camps.forEach((c,idx)=>{
-    spawnBuilding('turret',c.x,c.z,1);
-    if(idx===1)spawnBuilding('dronebay',c.x+8,c.z+7,1);
-    if(idx===2)spawnBuilding('power',c.x+7,c.z-6,1);
+    spawnBuilding('turret',c.x,c.z,c.t);
+    if(idx===1)spawnBuilding('dronebay',c.x+8,c.z+7,c.t);
+    if(idx===2)spawnBuilding('power',c.x+7,c.z-6,c.t);
     const cu=[['tank',c.x+5,c.z-5],['rocketeer',c.x-4,c.z+4],['rifleman',c.x+2,c.z+6],['dogbot',c.x-8,c.z-3]];
-    for(const[t,x,z]of cu){const u=spawnUnit(t,x,z,1);u.order={mode:'guard',anchor:{x,z}};}
+    for(const[t,x,z]of cu){const u=spawnUnit(t,x,z,c.t);u.order={mode:'guard',anchor:{x,z}};}
   });
   ['dogbot','droneugv'].forEach(t=>{if(!AI_COMP.includes(t))AI_COMP.push(t);});
   G.credits[0]=Math.max(G.credits[0],9500);
-  cam.x=-70;cam.z=68;
+  cam.x=-280;cam.z=278;
   setSelection([hq]);
   announce('Convoy inbound: reach open ground and press DEP to deploy the Mobile HQ');
 };
@@ -6853,25 +6926,25 @@ buildWorld=function(){
 const _aiTick=aiTick;
 aiTick=function(dt){
   _aiTick(dt);
-  const ai=G.ai;
-  if(G.t>120&&!ai.v5Raid1){
-    ai.v5Raid1=true;
-    [['apc',62,48],['rifleman',60,51],['rocketeer',58,49]].forEach(a=>{
-      const u=spawnUnit(a[0],a[1],a[2],1);u.order={mode:'amove'};u.dest={x:-60,z:60};});
-    announce('Enemy raiding party moving');sfx.alert();
-  }
-  if(G.t>240&&!ai.v5Boost){
-    ai.v5Boost=true;G.credits[1]+=3500;
+  const cy=G.ents.find(e=>!e.dead&&e.team===0&&e.type==='conyard');
+  const raidFrom=(team,comp,label)=>{
+    const ecy=G.ents.find(e=>!e.dead&&e.team===team&&e.type==='conyard');
+    if(!ecy||!cy)return;
+    comp.forEach((t,i)=>{
+      const u=spawnUnit(t,ecy.pos.x-8-i*3,ecy.pos.z+8+i*2,team);
+      u.order={mode:'amove'};u.dest={x:cy.pos.x+rand(-8,8),z:cy.pos.z+rand(-8,8)};});
+    announce(label);sfx.alert();
+  };
+  const A=G.ais[0];
+  if(G.t>150&&!A.v5Raid1){A.v5Raid1=true;raidFrom(1,['apc','rifleman','rocketeer'],'Enemy raiding party moving');}
+  if(G.t>300&&!A.v5Boost){
+    A.v5Boost=true;
+    for(let ti=1;ti<=3;ti++)G.credits[ti]+=3500;
     const ecy=G.ents.find(e=>!e.dead&&e.team===1&&e.type==='conyard');
     if(ecy){spawnUnit('droneugv',ecy.pos.x-10,ecy.pos.z+8,1);spawnUnit('dogbot',ecy.pos.x-13,ecy.pos.z+10,1);}
     announce('Enemy drone reserve detected');
   }
-  if(G.t>360&&!ai.v5Raid2){
-    ai.v5Raid2=true;
-    [['droneugv',-58,-70],['dogbot',-61,-67],['dogbot',-55,-73]].forEach(a=>{
-      const u=spawnUnit(a[0],a[1],a[2],1);u.order={mode:'amove'};u.dest={x:-56,z:58};});
-    announce('Robotics raid inbound');sfx.alert();
-  }
+  if(G.t>440&&!A.v5Raid2){A.v5Raid2=true;raidFrom(2,['droneugv','dogbot','dogbot'],'Robotics raid inbound');}
 };
 /* ============================ END V0.5 ============================ */
 
