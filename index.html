@@ -80,8 +80,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 #selchip .snm{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;}
 #selchip .shp{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;}
 #selchip .slv{color:var(--amber);}
-.cbtn{width:46px;background:rgba(30,22,44,.85);border:1px solid var(--amber-dim);color:var(--ink);
-  cursor:pointer;font-size:9px;font-weight:700;letter-spacing:.05em;padding:4px 0;line-height:1.2;}
+.cbtn{width:54px;min-height:50px;background:rgba(30,22,44,.85);border:1px solid var(--amber-dim);color:var(--ink);
+  cursor:pointer;font-size:9px;font-weight:700;letter-spacing:.05em;padding:4px 0 3px;line-height:1.2;}
+.cbtn .cico{display:block;font-size:19px;line-height:1.25;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));}
 .cbtn small{display:block;font-size:8px;color:var(--muted);font-weight:400;letter-spacing:.08em;}
 .cbtn:hover{border-color:var(--amber);}
 .cbtn.arm{border-color:var(--teal);color:var(--teal);background:rgba(35,60,58,.85);}
@@ -120,9 +121,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   #clock{display:none;}
   #sidebar{width:168px;}
   #sidebar.closed{transform:translateX(168px);}
-  #minimap{width:112px;height:112px;}
+  #minimap{width:138px;height:138px;}
   #cmdbar{max-width:calc(100vw - 20px);bottom:130px;left:10px;transform:none;flex-wrap:wrap;}
-  .cbtn{width:44px;min-height:40px;}
+  .cbtn{width:52px;min-height:52px;}
+  .cbtn .cico{font-size:21px;}
 }
 </style>
 <style id="v05css">
@@ -165,18 +167,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 
 <div id="cmdbar" class="panel">
   <div id="selchip"></div>
-  <button class="cbtn" id="cAttack">ATK<small>attack</small></button>
-  <button class="cbtn" id="cPatrol">PTL<small>patrol</small></button>
-  <button class="cbtn" id="cGuard">GRD<small>guard</small></button>
-  <button class="cbtn" id="cScout">SCT<small>scout</small></button>
-  <button class="cbtn" id="cBoard">BRD<small>board</small></button>
-  <button class="cbtn" id="cUnload">ULD<small>unload</small></button>
-  <button class="cbtn" id="cRally">RLY<small>rally</small></button>
-  <button class="cbtn" id="cDeploy">DEP<small>deploy</small></button>
-  <button class="cbtn" id="cSquad">SQD<small>cohort</small></button>
-  <button class="cbtn" id="cType">TYP<small>same type</small></button>
-  <button class="cbtn" id="cStop">STP<small>stop</small></button>
-  <button class="cbtn" id="cDesel">X<small>clear</small></button>
+  <button class="cbtn" id="cAttack"><span class="cico">⚔️</span><small>attack</small></button>
+  <button class="cbtn" id="cPatrol"><span class="cico">🔁</span><small>patrol</small></button>
+  <button class="cbtn" id="cGuard"><span class="cico">🛡️</span><small>guard</small></button>
+  <button class="cbtn" id="cScout"><span class="cico">🔭</span><small>scout</small></button>
+  <button class="cbtn" id="cBoard"><span class="cico">🚚</span><small>board</small></button>
+  <button class="cbtn" id="cUnload"><span class="cico">⏏️</span><small>unload</small></button>
+  <button class="cbtn" id="cRally"><span class="cico">🚩</span><small>rally</small></button>
+  <button class="cbtn" id="cDeploy"><span class="cico">🏗️</span><small>deploy</small></button>
+  <button class="cbtn" id="cSquad"><span class="cico">👥</span><small>cohort</small></button>
+  <button class="cbtn" id="cType"><span class="cico">🔗</span><small>same type</small></button>
+  <button class="cbtn" id="cStop"><span class="cico">⏹️</span><small>stop</small></button>
+  <button class="cbtn" id="cDesel"><span class="cico">✕</span><small>clear</small></button>
 </div>
 
 <div id="mmwrap" class="panel"><canvas id="minimap" width="168" height="168"></canvas></div>
@@ -5394,12 +5396,19 @@ function updateCmdbar(){
     if(e.type==='apc')extra='<div class="shp">Carrying '+e.cargoUnits.length+' / '+e.def.cap+'</div>';
     if(e.type==='harvester')extra='<div class="shp">Ore '+Math.round(e.cargo)+' / '+e.def.hcap+'</div>';
     chip.innerHTML='<div class="snm">'+e.def.name+'</div><div class="shp">'+hpTxt+'</div>'+extra;
-  }else chip.innerHTML='<div class="snm">'+sel.length+' Units</div><div class="shp">Cohort ready</div>';
+  }else{
+    const byType={};
+    for(const e of sel)byType[e.def.name]=(byType[e.def.name]||0)+1;
+    const parts=Object.entries(byType).sort((p,q)=>q[1]-p[1]).slice(0,3)
+      .map(([nm,n])=>n+'\u00d7 '+nm).join(' \u00b7 ');
+    const more=Object.keys(byType).length>3?' \u00b7 \u2026':'';
+    chip.innerHTML='<div class="snm">'+sel.length+' selected</div><div class="shp">'+parts+more+'</div>';
+  }
   const units=sel.filter(e=>e.cat==='u');
   const allInf=units.length&&units.every(u=>u.def.armor==='inf');
   const anyAPC=G.ents.some(e=>!e.dead&&e.team===0&&e.type==='apc'&&e.cargoUnits.length<e.def.cap);
   const selAPCcargo=units.some(u=>u.type==='apc'&&u.cargoUnits.length);
-  const prod=sel.length===1&&sel[0].cat==='b'&&(sel[0].type==='barracks'||sel[0].type==='factory');
+  const prod=sel.length===1&&sel[0].cat==='b'&&G.queues[sel[0].type]!==undefined;
   CB.cAttack.classList.toggle('off',!units.length);
   CB.cPatrol.classList.toggle('off',!units.length);
   CB.cGuard.classList.toggle('off',!units.length);
@@ -5642,7 +5651,7 @@ function applyDamage(t,raw,wtype,attacker){
     if(G.t-(G.warnT||-99)>9){
       G.warnT=G.t;
       announce(t.cat==='b'?'Base under attack':'Forces under attack');
-      sfx.alert();
+      sfx.alert();mmPing(t.pos.x,t.pos.z,'#ff5d5d');
     }
   }
   if(t.hp<=0){
@@ -6140,7 +6149,7 @@ function prodTick(dt){
         const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
         u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
         if(item.type==='harvester'){u.order={mode:'idle'};u.dest=null;}
-        sfx.ready();
+        sfx.ready();mmPing(u.pos.x,u.pos.z,'#37e0cf');
       }
     }
   }
@@ -6238,6 +6247,8 @@ function rebuildMMFog(){
   }
   mmFogCtx.putImageData(img,0,0);
 }
+const mmPings=[];
+function mmPing(x,z,color){mmPings.push({x,z,t0:G.t,color:color||'#ff5d5d'});if(mmPings.length>8)mmPings.shift();}
 function drawMinimap(){
   const S=168,k=S/(2*HALF);
   const mx=x=>(x+HALF)*k,mz=z=>(z+HALF)*k;
@@ -6258,6 +6269,15 @@ function drawMinimap(){
   const vw=cam.dist*1.15*k,vh=cam.dist*0.85*k;
   mmCtx.strokeStyle='rgba(233,223,207,0.7)';mmCtx.lineWidth=1;
   mmCtx.strokeRect(mx(cam.x)-vw/2,mz(cam.z)-vh/2,vw,vh);
+  /* event pings */
+  for(let pi=mmPings.length-1;pi>=0;pi--){
+    const P=mmPings[pi],age=G.t-P.t0;
+    if(age>2.2){mmPings.splice(pi,1);continue;}
+    mmCtx.strokeStyle=P.color;mmCtx.globalAlpha=1-age/2.2;
+    mmCtx.lineWidth=1.5;mmCtx.beginPath();
+    mmCtx.arc(mx(P.x),mz(P.z),2+age*9,0,6.283);mmCtx.stroke();
+    mmCtx.globalAlpha=1;
+  }
 }
 const msgEl=document.getElementById('msg');
 function announce(txt){
@@ -6744,7 +6764,7 @@ prodTick=function(dt){
         const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
         u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
         if(item.type==='harvester'){u.order={mode:'idle'};u.dest=null;}
-        sfx.ready();
+        sfx.ready();mmPing(u.pos.x,u.pos.z,'#37e0cf');
       }
     }
   }
