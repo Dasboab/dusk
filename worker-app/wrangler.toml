@@ -1,0 +1,10 @@
+# Game proxy: serves the game at app.broken-meridian.com
+# Keeps the existing worker name so dusk.rasykes1992.workers.dev keeps working.
+name = "dusk"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+routes = [
+  { pattern = "app.broken-meridian.com", custom_domain = true }
+]

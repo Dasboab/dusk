@@ -1,0 +1,9 @@
+# Landing page at main.broken-meridian.com
+name = "broken-meridian-main"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+routes = [
+  { pattern = "main.broken-meridian.com", custom_domain = true }
+]

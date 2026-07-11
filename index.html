@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="DUSK">
+<meta name="apple-mobile-web-app-title" content="Broken Meridian">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d0a16">
-<title>DUSK : Dawn Convoy</title>
+<title>BROKEN MERIDIAN : Dawn Convoy</title>
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13.5" fill="%23161022" stroke="%23f0a24a" stroke-width="2"/><path d="M4.5 16h23" stroke="%238a6a3a" stroke-width="1.3"/><path d="M7 9.5c5-2.6 13-2.6 18 0M7 22.5c5 2.6 13 2.6 18 0" stroke="%238a6a3a" stroke-width="1.1" fill="none"/><path d="M16 2.5C11.5 6.5 11.5 12 13.5 15" stroke="%23ffd08a" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M18.5 17C20.5 20.5 20.5 25.5 16 29.5" stroke="%23ffd08a" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'>
 <style>
 :root{
   --amber:#ffb454; --amber-dim:rgba(255,180,84,.25); --teal:#37e0cf; --red:#ff5148;
@@ -25,7 +26,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 #topbar{position:fixed;top:0;left:0;right:0;height:44px;z-index:30;display:flex;align-items:center;
   gap:12px;padding:0 10px;background:linear-gradient(180deg,rgba(9,7,17,.95),rgba(9,7,17,.72));
   border-bottom:1px solid var(--amber-dim);}
-#logo{font-weight:800;font-size:16px;letter-spacing:.45em;color:var(--amber);text-shadow:0 0 14px rgba(255,160,60,.45);}
+#logo{font-weight:800;font-size:13px;letter-spacing:.3em;color:var(--amber);text-shadow:0 0 14px rgba(255,160,60,.45);}
 .stat{display:flex;flex-direction:column;line-height:1.1;}
 .stat b{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink);}
 #credits b{color:var(--amber);}
@@ -88,6 +89,44 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .cbtn.arm{border-color:var(--teal);color:var(--teal);background:rgba(35,60,58,.85);}
 .cbtn.off{display:none;}
 
+/* ---- v0.6 console skin ---- */
+.panel{background:linear-gradient(180deg,rgba(41,30,60,.94),rgba(22,14,36,.94));
+ border:1px solid #6d4f2a;border-radius:3px;
+ box-shadow:inset 0 1px 0 rgba(211,160,94,.28),inset 0 -1px 0 rgba(0,0,0,.65),
+  inset 1px 0 0 rgba(211,160,94,.12),inset -1px 0 0 rgba(0,0,0,.4),0 4px 12px rgba(0,0,0,.55);}
+#topbar{background:linear-gradient(180deg,rgba(46,33,64,.96),rgba(25,16,36,.96));
+ border-bottom:2px solid #6d4f2a;
+ box-shadow:inset 0 -1px 0 rgba(211,160,94,.22),0 2px 8px rgba(0,0,0,.5);}
+.cbtn{background:linear-gradient(180deg,#3b2c55,#251b39 55%,#1b1229);
+ border:1px solid #0a0712;border-radius:3px;
+ box-shadow:inset 0 1px 0 rgba(211,160,94,.35),inset 1px 0 0 rgba(211,160,94,.14),
+  inset 0 -2px 3px rgba(0,0,0,.55),0 1px 0 #000;}
+.cbtn:hover{border-color:#0a0712;
+ box-shadow:inset 0 1px 0 rgba(255,208,138,.55),inset 1px 0 0 rgba(211,160,94,.2),
+  inset 0 -2px 3px rgba(0,0,0,.55),0 0 8px rgba(240,162,74,.35);}
+.cbtn:active,.cbtn.arm{box-shadow:inset 0 2px 5px rgba(0,0,0,.75),inset 0 -1px 0 rgba(211,160,94,.2);}
+.cbtn svg.cico{width:20px;height:20px;display:block;margin:1px auto 2px;color:var(--amber);
+ filter:drop-shadow(0 1px 1px rgba(0,0,0,.8));}
+.cbtn.arm svg.cico{color:var(--teal);}
+.bbtn{border-radius:3px;box-shadow:inset 0 1px 0 rgba(211,160,94,.22),inset 0 -2px 3px rgba(0,0,0,.5);}
+#mmwrap{padding:7px;border:2px solid #6d4f2a;border-radius:4px;
+ background-image:
+  radial-gradient(circle 2px at 7px 7px,#c99a58 99%,transparent),
+  radial-gradient(circle 2px at calc(100% - 7px) 7px,#c99a58 99%,transparent),
+  radial-gradient(circle 2px at 7px calc(100% - 7px),#c99a58 99%,transparent),
+  radial-gradient(circle 2px at calc(100% - 7px) calc(100% - 7px),#c99a58 99%,transparent),
+  linear-gradient(180deg,rgba(43,31,63,.96),rgba(22,15,36,.96));
+ box-shadow:inset 0 1px 0 rgba(211,160,94,.3),inset 0 -1px 0 rgba(0,0,0,.7),0 4px 12px rgba(0,0,0,.55);}
+.prow{display:flex;gap:7px;align-items:center;}
+.pgrid{display:flex;flex-wrap:wrap;gap:3px;max-width:196px;padding-top:2px;}
+.ptile{position:relative;width:30px;height:30px;border:1px solid #6d4f2a;cursor:pointer;
+ background-color:#120c1e;background-size:cover;background-position:center;border-radius:2px;
+ box-shadow:inset 0 1px 0 rgba(211,160,94,.3),inset 0 -1px 0 rgba(0,0,0,.8);}
+.ptile.big{width:36px;height:36px;cursor:default;}
+.ptile b{position:absolute;right:1px;bottom:-1px;font-size:9px;color:#ffd08a;
+ text-shadow:0 1px 2px #000,0 0 3px #000;font-weight:800;}
+.ptile:hover{border-color:var(--amber);}
+
 /* minimap */
 #mmwrap{position:fixed;left:10px;bottom:10px;z-index:25;padding:4px;}
 #minimap{display:block;width:150px;height:150px;background:#0b0815;cursor:crosshair;}
@@ -104,7 +143,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   background:radial-gradient(ellipse at 50% 40%,rgba(43,22,50,.88),rgba(8,6,14,.97));}
 .card{max-width:480px;max-height:92vh;overflow-y:auto;padding:26px 30px;text-align:center;
   border:1px solid var(--amber-dim);background:rgba(12,9,20,.92);box-shadow:0 0 60px rgba(255,140,60,.08);}
-.card h1{margin:0;font-size:40px;font-weight:800;letter-spacing:.5em;color:var(--amber);
+.card h1{margin:0;font-size:27px;font-weight:800;letter-spacing:.3em;white-space:nowrap;color:var(--amber);
   text-shadow:0 0 26px rgba(255,150,60,.55);padding-left:.5em;}
 .card .sub{margin:4px 0 16px;font-size:10px;letter-spacing:.28em;color:var(--muted);text-transform:uppercase;}
 .card p{font-size:12px;line-height:1.6;color:#c9bda9;text-align:left;margin:0 0 14px;}
@@ -136,7 +175,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 <div id="game"></div>
 
 <div id="topbar">
-  <div id="logo">DUSK</div>
+  <div id="logo">BROKEN MERIDIAN</div>
   <div class="stat" id="credits"><span class="lbl">Credits</span><b id="creditval">0</b></div>
   <div class="stat" id="powerwrap"><span class="lbl" id="powerlabel">Power 0 / 0</span>
     <div id="powerbar"><div id="powerfill"></div></div></div>
@@ -167,18 +206,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 
 <div id="cmdbar" class="panel">
   <div id="selchip"></div>
-  <button class="cbtn" id="cAttack"><span class="cico">⚔️</span><small>attack</small></button>
-  <button class="cbtn" id="cPatrol"><span class="cico">🔁</span><small>patrol</small></button>
-  <button class="cbtn" id="cGuard"><span class="cico">🛡️</span><small>guard</small></button>
-  <button class="cbtn" id="cScout"><span class="cico">🔭</span><small>scout</small></button>
-  <button class="cbtn" id="cBoard"><span class="cico">🚚</span><small>board</small></button>
-  <button class="cbtn" id="cUnload"><span class="cico">⏏️</span><small>unload</small></button>
-  <button class="cbtn" id="cRally"><span class="cico">🚩</span><small>rally</small></button>
-  <button class="cbtn" id="cDeploy"><span class="cico">🏗️</span><small>deploy</small></button>
-  <button class="cbtn" id="cSquad"><span class="cico">👥</span><small>cohort</small></button>
-  <button class="cbtn" id="cType"><span class="cico">🔗</span><small>same type</small></button>
-  <button class="cbtn" id="cStop"><span class="cico">⏹️</span><small>stop</small></button>
-  <button class="cbtn" id="cDesel"><span class="cico">✕</span><small>clear</small></button>
+  <button class="cbtn" id="cAttack"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L19 5M4.6 14.6L9.4 19.4M17 17L5 5M14.6 19.4L19.4 14.6"/></svg><small>attack</small></button>
+  <button class="cbtn" id="cPatrol"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M21.5 8.5L20 12l-3.4-1.4"/></svg><small>patrol</small></button>
+  <button class="cbtn" id="cGuard"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.8-7 10-4-2.2-7-5.5-7-10V6z"/></svg><small>guard</small></button>
+  <button class="cbtn" id="cScout"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="5"/><path d="M13.8 13.8L20 20M8 10h4M10 8v4"/></svg><small>scout</small></button>
+  <button class="cbtn" id="cBoard"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="7" rx="1.5"/><circle cx="8.5" cy="18" r="1.6"/><circle cx="15.5" cy="18" r="1.6"/><path d="M12 2v6M9.4 5.4L12 8l2.6-2.6"/></svg><small>board</small></button>
+  <button class="cbtn" id="cUnload"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l6 7.5H6z"/><path d="M6 17.5h12"/></svg><small>unload</small></button>
+  <button class="cbtn" id="cRally"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V3.5"/><path d="M6 4h11l-3 3.5 3 3.5H6z"/></svg><small>rally</small></button>
+  <button class="cbtn" id="cDeploy"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v7M9.4 6.4L12 9l2.6-2.6"/><path d="M5 12.5h14V20H5z"/><path d="M9 20v-4h6v4"/></svg><small>deploy</small></button>
+  <button class="cbtn" id="cSquad"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.1"/><path d="M4 20c0-3.4 2.2-5.6 5-5.6s5 2.2 5 5.6"/><circle cx="16.5" cy="9" r="2.4"/><path d="M15.5 20c.3-2.8 1.9-4.6 4-4.6 1 0 1.9.4 2.5 1"/></svg><small>cohort</small></button>
+  <button class="cbtn" id="cType"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.5a4 4 0 0 1 0-5.6l3-3a4 4 0 0 1 5.6 5.6L17 13"/><path d="M14 9.5a4 4 0 0 1 0 5.6l-3 3a4 4 0 0 1-5.6-5.6L7 11"/></svg><small>same type</small></button>
+  <button class="cbtn" id="cStop"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" fill="currentColor" stroke="none"/></svg><small>stop</small></button>
+  <button class="cbtn" id="cDesel"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 7L7 17"/></svg><small>clear</small></button>
 </div>
 
 <div id="mmwrap" class="panel"><canvas id="minimap" width="168" height="168"></canvas></div>
@@ -188,12 +227,13 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 
 <div class="screen" id="overlay">
   <div class="card">
-    <h1>DUSK</h1>
+    <h1>BROKEN MERIDIAN</h1>
     <div class="sub">Operation Dawn Convoy &middot; v0.5</div>
-    <p>Commander, the sun never fully rises here. Your base convoy is rolling in from the west while
-    a hostile stronghold holds the far ridge. Escort the Mobile HQ to open ground, press <b>DEP</b> to
-    deploy it into a Construction Yard, then build power, extract auren ore and field a combined
-    force: armour, drones, counter drone teams and a navy. Level their Construction Yard to win.</p>
+    <p>Commander, the sun never fully rises here. Your convoy is rolling in from the west while
+    three rival factions hold the ridges, and rich auren deposits wait on the islands offshore.
+    Escort the Mobile HQ to open ground, press <b>DEP</b> to deploy it into a Construction Yard,
+    then build power, extract ore and field a combined force: armour, drones, counter drone teams
+    and a navy. Level every enemy Construction Yard to win.</p>
     <div class="keys">
       <b>Touch:</b> drag to pan (flick to glide), pinch to zoom, tap to select and order.
       Hold still then drag for box select, or arm the <b>Box</b> button and drag.<br>
@@ -5424,14 +5464,23 @@ function updateCmdbar(){
     let extra='';
     if(e.type==='apc')extra='<div class="shp">Carrying '+e.cargoUnits.length+' / '+e.def.cap+'</div>';
     if(e.type==='harvester')extra='<div class="shp">Ore '+Math.round(e.cargo)+' / '+e.def.hcap+'</div>';
-    chip.innerHTML='<div class="snm">'+e.def.name+'</div><div class="shp">'+hpTxt+'</div>'+extra;
+    chip.innerHTML='<div class="prow">'
+      +'<div class="ptile big" style="background-image:url(assets/units/'+e.type+'.png)"></div>'
+      +'<div><div class="snm">'+e.def.name+'</div><div class="shp">'+hpTxt+'</div>'+extra+'</div></div>';
+    chip.onclick=null;
   }else{
     const byType={};
-    for(const e of sel)byType[e.def.name]=(byType[e.def.name]||0)+1;
-    const parts=Object.entries(byType).sort((p,q)=>q[1]-p[1]).slice(0,3)
-      .map(([nm,n])=>n+'\u00d7 '+nm).join(' \u00b7 ');
-    const more=Object.keys(byType).length>3?' \u00b7 \u2026':'';
-    chip.innerHTML='<div class="snm">'+sel.length+' selected</div><div class="shp">'+parts+more+'</div>';
+    for(const e of sel){(byType[e.type]=byType[e.type]||{n:0,nm:e.def.name}).n++;}
+    const ordered=Object.entries(byType).sort((p,q)=>q[1].n-p[1].n);
+    const tiles=ordered.slice(0,8).map(([ty,o])=>
+      '<div class="ptile" data-type="'+ty+'" title="'+o.nm+'" '
+      +'style="background-image:url(assets/units/'+ty+'.png)"><b>'+o.n+'</b></div>').join('');
+    const more=ordered.length>8?'<div class="ptile" style="line-height:28px;text-align:center;">\u2026</div>':'';
+    chip.innerHTML='<div class="snm">'+sel.length+' selected</div><div class="pgrid">'+tiles+more+'</div>';
+    chip.onclick=ev=>{
+      const t=ev.target.closest('.ptile');if(!t||!t.dataset.type)return;
+      setSelection(G.selected.filter(e=>e.type===t.dataset.type));
+    };
   }
   const units=sel.filter(e=>e.cat==='u');
   const allInf=units.length&&units.every(u=>u.def.armor==='inf');
