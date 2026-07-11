@@ -5,6 +5,14 @@ const PAGE = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BROKEN MERIDIAN : browser RTS</title>
+<meta name="description" content="Broken Meridian is a real-time strategy game that runs in your browser. Combined arms across land, sea and air against three rival factions. Nothing to install.">
+<link rel="canonical" href="https://main.broken-meridian.com/">
+<meta property="og:title" content="BROKEN MERIDIAN">
+<meta property="og:description" content="Browser RTS. Armour, drones and a navy against three rival factions. Play free, nothing to install.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://main.broken-meridian.com/">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0d0a16">
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13.5" fill="%23161022" stroke="%23f0a24a" stroke-width="2"/><path d="M4.5 16h23" stroke="%238a6a3a" stroke-width="1.3"/><path d="M7 9.5c5-2.6 13-2.6 18 0M7 22.5c5 2.6 13 2.6 18 0" stroke="%238a6a3a" stroke-width="1.1" fill="none"/><path d="M16 2.5C11.5 6.5 11.5 12 13.5 15" stroke="%23ffd08a" stroke-width="2.2" fill="none" stroke-linecap="round"/><path d="M18.5 17C20.5 20.5 20.5 25.5 16 29.5" stroke="%23ffd08a" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>'>
 <style>
 :root{--amber:#f0a24a;--amber-hi:#ffd08a;--ink:#e8dff2;--muted:#9a8ab0;--brass:#6d4f2a;}
@@ -43,9 +51,22 @@ footer{margin-top:auto;padding-top:48px;font-size:11px;color:#6a5c80;letter-spac
 <footer>&copy; 2026 Broken Meridian. Runs on phones, tablets and desktops.</footer>
 </body>
 </html>`;
+const SEC = {
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  'content-security-policy': "frame-ancestors 'none'"
+};
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/robots.txt')
+      return new Response('User-agent: *\nAllow: /\nSitemap: https://main.broken-meridian.com/sitemap.xml\n',
+        { headers: { 'content-type': 'text/plain', ...SEC } });
+    if (url.pathname === '/sitemap.xml')
+      return new Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://main.broken-meridian.com/</loc></url></urlset>',
+        { headers: { 'content-type': 'application/xml', ...SEC } });
     if (url.hostname !== 'main.broken-meridian.com') {
       url.hostname = 'main.broken-meridian.com';
       return Response.redirect(url.toString(), 301);
@@ -53,7 +74,8 @@ export default {
     return new Response(PAGE, {
       headers: {
         'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'public, max-age=300'
+        'cache-control': 'public, max-age=300',
+        ...SEC
       }
     });
   }

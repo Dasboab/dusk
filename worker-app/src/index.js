@@ -17,6 +17,10 @@ export default {
     h.set('access-control-allow-origin', '*');
     h.delete('content-security-policy');
     h.set('x-bm-proxy', 'github-pages');
+    h.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
+    h.set('x-content-type-options', 'nosniff');
+    h.set('referrer-policy', 'strict-origin-when-cross-origin');
+    h.set('content-security-policy', "frame-ancestors 'none'");
     if (isHtml) {
       h.set('cache-control', 'no-store, no-cache, must-revalidate, max-age=0');
       h.set('pragma', 'no-cache');
