@@ -5686,6 +5686,24 @@ function moveUnit(u,dt){
   const dist=Math.hypot(dx,dz);
   if(dist<1.1){u.dest=null;return true;}
   dx/=dist;dz/=dist;
+  /* lookahead steering: curve around prop blockers and shoreline */
+  const sea=u.def.domain==='sea', air=u.def.domain==='air';
+  const inPb=(!air&&!sea)?propBlocked(u.pos.x,u.pos.z,u.r*0.4):false;
+  const blockedAt=(X,Z)=>isWater(X,Z)!==sea||(!air&&!sea&&propBlocked(X,Z,u.r*0.4));
+  if(!air&&!inPb){
+    /* destination sits inside a blocker: treat edge contact as arrival */
+    if(dist<u.r+2.4&&!sea&&propBlocked(u.dest.x,u.dest.z,0.2)){u.dest=null;return true;}
+    const LA=Math.min(3.4,dist), LB=Math.min(1.3,dist);
+    const rayHit=(cx2,cz2)=>blockedAt(u.pos.x+cx2*LA,u.pos.z+cz2*LA)||blockedAt(u.pos.x+cx2*LB,u.pos.z+cz2*LB);
+    if(rayHit(dx,dz)){
+      const base=Math.atan2(dz,dx), pref=u.avSide||1;
+      const angs=[0.55*pref,-0.55*pref,1.1*pref,-1.1*pref,1.75*pref,-1.75*pref,2.4*pref,-2.4*pref];
+      for(const ang of angs){
+        const ca=Math.cos(base+ang), sa=Math.sin(base+ang);
+        if(!rayHit(ca,sa)){dx=ca;dz=sa;u.avSide=ang>0?1:-1;break;}
+      }
+    } else u.avSide=0;
+  }
   let vx=dx*u.def.speed,vz=dz*u.def.speed;
   /* separation + collision physics */
   for(const o of G.ents){
@@ -5700,13 +5718,15 @@ function moveUnit(u,dt){
     }
   }
   const nx=clamp(u.pos.x+vx*dt,-HALF,HALF), nz=clamp(u.pos.z+vz*dt,-HALF,HALF);
-  const sea=u.def.domain==='sea';
-  const inPb=(u.def.domain!=='air'&&!sea)?propBlocked(u.pos.x,u.pos.z,u.r*0.4):false;
-  const pass=(X,Z)=>isWater(X,Z)===sea&&(u.def.domain==='air'||sea||inPb||!propBlocked(X,Z,u.r*0.4));
+  const pass=(X,Z)=>isWater(X,Z)===sea&&(air||sea||inPb||!propBlocked(X,Z,u.r*0.4));
+  const ox=u.pos.x, oz=u.pos.z;
   if(pass(nx,nz)){u.pos.x=nx;u.pos.z=nz;}
   else if(pass(nx,u.pos.z))u.pos.x=nx;
   else if(pass(u.pos.x,nz))u.pos.z=nz;
-  else u.dest=null;
+  if(Math.hypot(u.pos.x-ox,u.pos.z-oz)<u.def.speed*dt*0.15){
+    u.stuckT=(u.stuckT||0)+dt;
+    if(u.stuckT>2.5){u.dest=null;u.stuckT=0;u.avSide=0;}
+  }else u.stuckT=0;
   u.pos.y=sea?0.16:groundH(u.pos.x,u.pos.z);
   const ty=Math.atan2(vx,vz)+Math.PI;
   let d=ty-u.mesh.rotation.y;
