@@ -4077,19 +4077,29 @@ function buildTerrainGeo(){
   const TL=new THREE.TextureLoader();
   const ldT=p=>{const t=TL.load(p);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=renderer.capabilities.getMaxAnisotropy();return t;};
   const terMat=new THREE.MeshLambertMaterial({vertexColors:true});
-  terMat.customProgramCacheKey=function(){return 'dusk-splat-v2';};
+  terMat.userData.keep=1;
+  terMat.customProgramCacheKey=function(){return 'dusk-splat-v3';};
   terMat.onBeforeCompile=(sh)=>{
     sh.uniforms.tGrass={value:ldT('assets/terrain/grass.jpg')};
     sh.uniforms.tDirt ={value:ldT('assets/terrain/dirt.jpg')};
     sh.uniforms.tRock ={value:ldT('assets/terrain/rock.jpg')};
     sh.uniforms.tSand ={value:ldT('assets/terrain/sand.jpg')};
-    sh.vertexShader='attribute vec4 splat;\nvarying vec4 vSplat;\nvarying vec2 tUv;\n'+
-      sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  vSplat=splat;\n  tUv=uv;');
-    sh.fragmentShader='uniform sampler2D tGrass;\nuniform sampler2D tDirt;\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nvarying vec4 vSplat;\nvarying vec2 tUv;\n'+
+    sh.vertexShader='attribute vec4 splat;\nvarying vec4 vSplat;\nvarying vec2 tUv;\nvarying vec3 vWp;\n'+
+      sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\n  vSplat=splat;\n  tUv=uv;\n  vWp=(modelMatrix*vec4(position,1.0)).xyz;');
+    sh.fragmentShader='uniform sampler2D tGrass;\nuniform sampler2D tDirt;\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nvarying vec4 vSplat;\nvarying vec2 tUv;\nvarying vec3 vWp;\n'+
       sh.fragmentShader.replace('#include <color_fragment>',
         '#include <color_fragment>\n'+
         '  vec2 uv1=tUv*34.0;\n'+
-        '  vec3 texc=texture2D(tGrass,uv1).rgb*vSplat.x+texture2D(tDirt,uv1).rgb*vSplat.y+texture2D(tRock,uv1*1.6).rgb*vSplat.z+texture2D(tSand,uv1).rgb*vSplat.w;\n'+
+        '  float mac=dot(texture2D(tDirt,tUv*1.3).rgb,vec3(0.333));\n'+
+        '  vec3 grass=mix(texture2D(tGrass,uv1).rgb,texture2D(tGrass,uv1*0.41+vec2(0.37,0.19)).rgb,clamp(mac*1.6-0.25,0.0,1.0));\n'+
+        '  float gl2=dot(grass,vec3(0.333)); grass=clamp(mix(vec3(gl2),grass,1.35),0.0,1.0);\n'+
+        '  grass=mix(grass,grass*vec3(1.24,1.08,0.5),smoothstep(0.5,0.82,mac)*0.55);\n'+
+        '  vec3 sand=mix(texture2D(tSand,uv1).rgb,texture2D(tSand,uv1*0.53+vec2(0.7)).rgb,0.5);\n'+
+        '  float sxr='+SHORE.toFixed(1)+'+sin((vWp.z+'+WSZ.toFixed(4)+')*0.05)*10.0+sin((vWp.z+'+WSZ.toFixed(4)+')*0.017)*6.0;\n'+
+        '  float dsh=sxr-vWp.x;\n'+
+        '  float wet=1.0-smoothstep(6.0,13.0,dsh);\n'+
+        '  sand=mix(sand,sand*vec3(0.5,0.55,0.6),wet*0.85);\n'+
+        '  vec3 texc=grass*vSplat.x+texture2D(tDirt,uv1).rgb*vSplat.y+texture2D(tRock,uv1*1.6).rgb*vSplat.z+sand*vSplat.w;\n'+
         '  float det=dot(texture2D(tDirt,tUv*9.0).rgb,vec3(0.333));\n'+
         '  texc*=(0.58+det*0.85);\n'+
         '  vec3 tint=diffuseColor.rgb; float tl=dot(tint,vec3(0.333));\n'+
@@ -4117,7 +4127,19 @@ let waterTick=null;
   }
   wg.setAttribute('color', new THREE.Float32BufferAttribute(wcols,3));
   const basePos=wp.array.slice();
-  const sea=new THREE.Mesh(wg, new THREE.MeshPhongMaterial({vertexColors:true, transparent:true, opacity:0.9, shininess:110, specular:0x4a6e80}));
+  const nc=document.createElement('canvas'); nc.width=nc.height=128;
+  const nx2=nc.getContext('2d'), nid=nx2.createImageData(128,128);
+  for(let i=0;i<128*128;i++){
+    const px=i%128, py=(i/128)|0;
+    const v=200+34*(0.5*hash(px*0.9,py*0.9)+0.3*hash(px*2.3+9,py*2.3+4)+0.2*hash(px*5.1+3,py*5.1+7));
+    nid.data[i*4]=nid.data[i*4+1]=nid.data[i*4+2]=v; nid.data[i*4+3]=255;
+  }
+  nx2.putImageData(nid,0,0);
+  const ntex=new THREE.CanvasTexture(nc);
+  ntex.wrapS=ntex.wrapT=THREE.RepeatWrapping; ntex.repeat.set(7,16);
+  const seaMat=new THREE.MeshPhongMaterial({map:ntex, vertexColors:true, transparent:true, opacity:0.9, shininess:110, specular:0x4a6e80});
+  seaMat.userData.keep=1;
+  const sea=new THREE.Mesh(wg, seaMat);
   sea.position.set(cx,0.12,0); scene.add(sea);
 
   /* foam strip hugging the shoreline */
@@ -4141,7 +4163,7 @@ let waterTick=null;
     }
   }
   fx.putImageData(img,0,0);
-  const ftex=new THREE.CanvasTexture(fc); ftex.minFilter=THREE.LinearFilter;
+  const ftex=new THREE.CanvasTexture(fc); ftex.minFilter=THREE.LinearFilter; ftex.wrapT=THREE.RepeatWrapping;
   const fmat=new THREE.MeshBasicMaterial({map:ftex, transparent:true, opacity:0.55, depthWrite:false});
   const foam=new THREE.Mesh(new THREE.PlaneGeometry(FW,TSIZE), fmat);
   foam.rotation.x=-Math.PI/2; foam.rotation.z=Math.PI; foam.position.set(SHORE,0.18,0);
@@ -4157,6 +4179,8 @@ let waterTick=null;
     wp.needsUpdate=true;
     if((nfr++)%6===0) wg.computeVertexNormals();
     fmat.opacity=0.5+Math.sin(t*1.6)*0.12;
+    ntex.offset.x=t*0.006; ntex.offset.y=t*0.011;
+    ftex.offset.y=Math.sin(t*0.7)*0.0022;
   };
 }
 
@@ -6810,6 +6834,7 @@ aiTick=function(dt){
   const seen=new WeakSet();
   function toStd(m){
     if(!m||m.isMeshStandardMaterial||m.isMeshBasicMaterial||seen.has(m))return m;
+    if(m.userData&&m.userData.keep)return m;
     if(!m.isMeshLambertMaterial&&!m.isMeshPhongMaterial)return m;
     const lit=m.emissive&&(m.emissive.r+m.emissive.g+m.emissive.b)>0.02;
     const s=new THREE.MeshStandardMaterial({
