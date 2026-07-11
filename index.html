@@ -4896,7 +4896,7 @@ function tryPlace(){
   endPlace();G.prodStruct=null;
   const nb=spawnBuilding(type,x,z,0,true);
   if(type==='refinery')spawnUnit('harvester',x,z-(BDEF.refinery.size*0.5+4),0);
-  if(type==='navalyard')nb.rally={x:x+BDEF.navalyard.size*0.5+9,z:z};
+  if(type==='navalyard')nb.rally={x:Math.max(x+BDEF.navalyard.size*0.5+9, shoreX(z)+6),z:z};
   sfx.place();refreshSidebar();
 }
 function cancelPlace(){endPlace();refreshSidebar();}
@@ -5682,6 +5682,8 @@ function killEnt(e){
 /* ============================ UNIT / BUILDING AI ============================ */
 function moveUnit(u,dt){
   if(!u.dest)return true;
+  if(u.def.domain==='sea'){const sx2=shoreX(u.dest.z)+2.5;if(u.dest.x<sx2)u.dest.x=sx2;}
+  else if(u.def.domain!=='air'&&isWater(u.dest.x,u.dest.z)){const sx2=shoreX(u.dest.z)-1.5;if(u.dest.x>sx2)u.dest.x=sx2;}
   let dx=u.dest.x-u.pos.x,dz=u.dest.z-u.pos.z;
   const dist=Math.hypot(dx,dz);
   if(dist<1.1){u.dest=null;return true;}
@@ -6133,7 +6135,7 @@ function prodTick(dt){
       const prod=G.ents.find(e=>!e.dead&&e.team===0&&e.type===from);
       if(prod){
         let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
-        if(from==='navalyard'){sx=prod.pos.x+prod.def.size*0.5+5;sz=prod.pos.z+rand(-3,3);let gg=0;while(!isWater(sx,sz)&&gg++<20)sx+=2;}
+        if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
         const u=spawnUnit(item.type,sx,sz,0);
         const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
         u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
@@ -6737,7 +6739,7 @@ prodTick=function(dt){
       const prod=G.ents.find(e=>!e.dead&&e.team===0&&e.type===from);
       if(prod){
         let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
-        if(from==='navalyard'){sx=prod.pos.x+prod.def.size*0.5+5;sz=prod.pos.z+rand(-3,3);let gg=0;while(!isWater(sx,sz)&&gg++<20)sx+=2;}
+        if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
         const u=spawnUnit(item.type,sx,sz,0);
         const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
         u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
