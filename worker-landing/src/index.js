@@ -44,7 +44,12 @@ footer{margin-top:auto;padding-top:48px;font-size:11px;color:#6a5c80;letter-spac
 </body>
 </html>`;
 export default {
-  async fetch() {
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.hostname !== 'main.broken-meridian.com') {
+      url.hostname = 'main.broken-meridian.com';
+      return Response.redirect(url.toString(), 301);
+    }
     return new Response(PAGE, {
       headers: {
         'content-type': 'text/html; charset=utf-8',
