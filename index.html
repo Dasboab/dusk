@@ -247,6 +247,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
       <b>H</b> home, <b>X</b> stop, <b>Esc</b> cancel.
     </div>
     <button class="bigbtn" id="startbtn">Deploy</button>
+    <button class="bigbtn" id="mpbtn" style="background:linear-gradient(180deg,#2b2440,#1d1830)">Multiplayer</button>
   </div>
 </div>
 
@@ -3958,7 +3959,9 @@ const G = {
   credits:[6000, 7500, 7500, 7500],
   ents:[], ore:[], projectiles:[], particles:[],
   selected:[], squads:[[],[],[]],
-  prodStruct:null, queues:{barracks:[], factory:[], navalyard:[]},
+  prodStructs:[null,null,null,null],
+  queues:[{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]}],
+  myTeam:0, mpGame:false,
   placing:null, pendingCmd:null,
   ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:315,z:-420}},
        {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:300,z:330}},
@@ -3972,7 +3975,11 @@ let EID = 1;
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 const d2=(ax,az,bx,bz)=>{const dx=ax-bx,dz=az-bz;return dx*dx+dz*dz;};
-const rand=(a,b)=>a+Math.random()*(b-a);
+let SRNG=null;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function seedRng(sd){SRNG=mulberry32(sd>>>0);}
+const rand=(a,b)=>a+(SRNG?SRNG():Math.random())*(b-a);
+const vrand=(a,b)=>a+Math.random()*(b-a);
 
 function hash(x,z){const s=Math.sin(x*127.1+z*311.7)*43758.5453;return s-Math.floor(s);}
 function vnoise(x,z){
@@ -4552,7 +4559,7 @@ function updateFog(){
   fog.visible.fill(0);
   const cw=TSIZE/FOGN;
   for(const e of G.ents){
-    if(e.team!==0||e.dead) continue;
+    if(e.team!==G.myTeam||e.dead) continue;
     const s=e.sight, px=e.pos.x, pz=e.pos.z;
     punch(exCtx,px,pz,s,1);
     const c0x=clamp(Math.floor((px-s+TSIZE/2)/cw),0,FOGN-1), c1x=clamp(Math.floor((px+s+TSIZE/2)/cw),0,FOGN-1);
@@ -4572,7 +4579,7 @@ function updateFog(){
   fgCtx.fillStyle='rgba(22,24,28,0.30)'; fgCtx.fillRect(0,0,FC,FC);
   fgCtx.drawImage(exCan,0,0);
   for(const e of G.ents){
-    if(e.team!==0||e.dead) continue;
+    if(e.team!==G.myTeam||e.dead) continue;
     punch(fgCtx,e.pos.x,e.pos.z,e.sight,1);
   }
   fogTex.needsUpdate=true;
@@ -4673,7 +4680,7 @@ function tapAction(cx,cy){
   if(own){
     const dbl=(performance.now()-lastTap.t<380)&&lastTap.type===own.type&&own.cat==='u';
     lastTap={t:performance.now(),type:own.type};
-    if(dbl){setSelection(G.ents.filter(e=>!e.dead&&e.team===0&&e.type===own.type));}
+    if(dbl){setSelection(G.ents.filter(e=>!e.dead&&e.team===G.myTeam&&e.type===own.type));}
     else setSelection([own]);
     return;
   }
@@ -4775,7 +4782,7 @@ cnv.addEventListener('contextmenu',e=>e.preventDefault());
 cnv.addEventListener('wheel',e=>{e.preventDefault();zoomTo(cam.dist+e.deltaY*0.03);},{passive:false});
 addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();keys[k]=true;
-  if(k==='h'){const cy=G.ents.find(x=>x.team===0&&x.type==='conyard'&&!x.dead);if(cy){cam.x=cy.pos.x;cam.z=cy.pos.z;}}
+  if(k==='h'){const cy=G.ents.find(x=>x.team===G.myTeam&&x.type==='conyard'&&!x.dead);if(cy){cam.x=cy.pos.x;cam.z=cy.pos.z;}}
   if(k==='x')orderStop();
   if(k==='escape'){if(G.placing)cancelPlace();else if(G.pendingCmd)clearPending();else clearSel();}
   if(k==='1'||k==='2'||k==='3')selectSquad(+k-1);
@@ -4842,7 +4849,7 @@ CB.cSquad .onclick=()=>assignSquad();
 CB.cType  .onclick=()=>{
   const types=new Set(G.selected.filter(e=>e.cat==='u').map(e=>e.type));
   if(!types.size)return;
-  setSelection(G.ents.filter(e=>!e.dead&&e.team===0&&e.cat==='u'&&types.has(e.type)));
+  setSelection(G.ents.filter(e=>!e.dead&&e.team===G.myTeam&&e.cat==='u'&&types.has(e.type)));
   announce('All units of type selected');sfx.click();
 };
 
@@ -4896,7 +4903,7 @@ function refreshSquadUI(){
 }
 document.querySelectorAll('.sq').forEach(b=>b.onclick=()=>selectSquad(+b.dataset.i));
 document.getElementById('armybtn').onclick=()=>{
-  const a=G.ents.filter(e=>!e.dead&&e.team===0&&e.cat==='u'&&e.type!=='harvester');
+  const a=G.ents.filter(e=>!e.dead&&e.team===G.myTeam&&e.cat==='u'&&e.type!=='harvester');
   if(a.length){setSelection(a);sfx.click();}
 };
 const boxbtn=document.getElementById('boxbtn');
@@ -4958,17 +4965,23 @@ function canPlace(type,x,z){
   for(const o of G.ore){if(o.amount>0&&d2(x,z,o.x,o.z)<(s*0.5+3)*(s*0.5+3))return false;}
   if(type==='navalyard')return true;   /* shoreline straddle already enforced above */
   let near=false;
-  for(const e of G.ents){if(e.team===0&&e.cat==='b'&&!e.dead&&d2(x,z,e.pos.x,e.pos.z)<44*44){near=true;break;}}
+  for(const e of G.ents){if(e.team===G.myTeam&&e.cat==='b'&&!e.dead&&d2(x,z,e.pos.x,e.pos.z)<44*44){near=true;break;}}
   return near;
 }
 function tryPlace(){
   if(!ghost||!ghost.userData.ok){sfx.deny();announce('Cannot place here');return;}
   const x=ghost.position.x,z=ghost.position.z,type=G.placing;
-  endPlace();G.prodStruct=null;
-  const nb=spawnBuilding(type,x,z,0,true);
-  if(type==='refinery')spawnUnit('harvester',x,z-(BDEF.refinery.size*0.5+4),0);
+  endPlace();sfx.place();
+  netCmd({k:'pl',type,x,z});
+}
+function _placeBuilding(team,type,x,z){
+  const ps=G.prodStructs[team];
+  if(!ps||ps.type!==type||ps.left>0)return;
+  G.prodStructs[team]=null;
+  const nb=spawnBuilding(type,x,z,team,true);
+  if(type==='refinery')spawnUnit('harvester',x,z-(BDEF.refinery.size*0.5+4),team);
   if(type==='navalyard')nb.rally={x:Math.max(x+BDEF.navalyard.size*0.5+9, shoreX(z)+6),z:z};
-  sfx.place();refreshSidebar();
+  if(team===G.myTeam)refreshSidebar();
 }
 function cancelPlace(){endPlace();refreshSidebar();}
 function endPlace(){
@@ -5421,7 +5434,7 @@ function spawnUnit(type,x,z,team){
     pos:mesh.position,mesh,dead:false,xp:0,rank:0,cd:0,target:null,dest:null,
     order:{mode:'idle'},noAcq:false,engFrom:null,squad:null,animT:rand(0,9),
     cargo:0,oreTgt:null,manual:false,cargoUnits:type==='apc'?[]:null,seen:false,scoutT:0};
-  if(team!==0)mesh.visible=false;
+  if(team!==G.myTeam)mesh.visible=false;
   makeBar(e);makeRing(e);G.ents.push(e);
   return e;
 }
@@ -5432,9 +5445,9 @@ function spawnBuilding(type,x,z,team,announceIt){
   const e={id:EID++,type,cat:'b',def,team,hp:def.hp,maxhp:def.hp,r:def.size*0.55,sight:def.sight,
     pos:mesh.position,mesh,dead:false,xp:0,rank:0,cd:rand(0,1),target:null,
     faceZ:team===0?-1:1,rally:null,rallyMk:null,seen:false};
-  if(team!==0)mesh.visible=false;
+  if(team!==G.myTeam)mesh.visible=false;
   makeBar(e);makeRing(e);G.ents.push(e);
-  if(announceIt)announce(def.name+' constructed');
+  if(announceIt&&team===G.myTeam)announce(def.name+' constructed');
   refreshSidebar&&refreshSidebar();
   return e;
 }
@@ -5484,7 +5497,7 @@ function updateCmdbar(){
   }
   const units=sel.filter(e=>e.cat==='u');
   const allInf=units.length&&units.every(u=>u.def.armor==='inf');
-  const anyAPC=G.ents.some(e=>!e.dead&&e.team===0&&e.type==='apc'&&e.cargoUnits.length<e.def.cap);
+  const anyAPC=G.ents.some(e=>!e.dead&&e.team===G.myTeam&&e.type==='apc'&&e.cargoUnits.length<e.def.cap);
   const selAPCcargo=units.some(u=>u.type==='apc'&&u.cargoUnits.length);
   const prod=sel.length===1&&sel[0].cat==='b'&&G.queues[sel[0].type]!==undefined;
   CB.cAttack.classList.toggle('off',!units.length);
@@ -5514,9 +5527,57 @@ function offsets(n){
   return arr;
 }
 function selUnits(){return G.selected.filter(e=>e.cat==='u'&&!e.dead);}
+function selIds(){return selUnits().filter(u=>u.team===G.myTeam).map(u=>u.id);}
+function entById(id){for(const e of G.ents)if(e.id===id)return e;return null;}
 function resetOrder(u){u.target=null;u.engFrom=null;u.noAcq=false;u.manual=false;}
-function smartOrder(w){
-  const units=selUnits();if(!units.length)return;
+/* ---- lockstep chokepoint: every state-changing command goes through here ---- */
+function netCmd(c){
+  if('x' in c)c.x=Math.round(c.x*10)/10;
+  if('z' in c)c.z=Math.round(c.z*10)/10;
+  if(G.mpGame&&window.NET&&NET.on){NET.sendCmd(c);return;}
+  execCmd(G.myTeam,c);
+}
+function cmdUnits(team,c){return (c.ids||[]).map(entById).filter(u=>u&&!u.dead&&u.cat==='u'&&u.team===team);}
+function execCmd(team,c){
+  switch(c.k){
+    case 'o':{
+      const units=cmdUnits(team,c), w={x:c.x,z:c.z};
+      const tg=c.tg!=null?entById(c.tg):null;
+      switch(c.op){
+        case 'sm':_ordSmart(units,w);break;
+        case 'am':_ordAMove(units,w);break;
+        case 'at':if(tg&&!tg.dead)_ordAttack(units,tg);break;
+        case 'pt':_ordPatrol(units,w);break;
+        case 'gd':_ordGuard(units,w);break;
+        case 'sc':_ordScout(units);break;
+        case 'st':_ordStop(units);break;
+        case 'bd':if(tg&&!tg.dead&&tg.team===team)_ordBoard(units,tg);break;
+        case 'ul':_ordUnload(units);break;
+      }break;}
+    case 'pr':_prodStart(team,c.kind,c.type);break;
+    case 'cx':_prodCancel(team,c.kind,c.type);break;
+    case 'pl':_placeBuilding(team,c.type,c.x,c.z);break;
+    case 'ra':{const b=entById(c.b);if(b&&!b.dead&&b.team===team&&b.cat==='b')_setRally(b,c.x,c.z);break;}
+    case 'dp':{const u=entById(c.id);if(u&&!u.dead&&u.team===team&&u.type==='mobilehq')_deployHQ(u);break;}
+  }
+}
+/* ---- senders (local UI, sfx feedback) ---- */
+function smartOrder(w){const ids=selIds();if(!ids.length)return;sfx.move();netCmd({k:'o',op:'sm',ids,x:w.x,z:w.z});}
+function orderAMove(w){const ids=selIds();if(!ids.length)return;sfx.move();netCmd({k:'o',op:'am',ids,x:w.x,z:w.z});}
+function orderAttack(t){const ids=selIds();if(!ids.length)return;sfx.attack();netCmd({k:'o',op:'at',ids,tg:t.id});}
+function orderPatrol(w){const ids=selIds();if(!ids.length)return;announce('Patrol route set');sfx.move();netCmd({k:'o',op:'pt',ids,x:w.x,z:w.z});}
+function orderGuard(w){const ids=selIds();if(!ids.length)return;announce('Holding position');sfx.move();netCmd({k:'o',op:'gd',ids,x:w.x,z:w.z});}
+function orderScout(){const ids=selIds();if(!ids.length)return;announce('Scouting the dark');sfx.move();netCmd({k:'o',op:'sc',ids});}
+function orderStop(){const ids=selIds();if(!ids.length)return;sfx.click();netCmd({k:'o',op:'st',ids});}
+function orderBoard(apc){const ids=selIds();if(!ids.length)return;announce('Boarding APC');sfx.move();netCmd({k:'o',op:'bd',ids,tg:apc.id});}
+function unloadAPCs(){
+  const ids=selUnits().filter(u=>u.team===G.myTeam&&u.def.cap&&u.cargoUnits&&u.cargoUnits.length).map(u=>u.id);
+  if(!ids.length)return;
+  announce('Squads deployed');sfx.move();netCmd({k:'o',op:'ul',ids});
+}
+/* ---- executors (pure deterministic sim mutations) ---- */
+function _ordSmart(units,w){
+  if(!units.length)return;
   let node=null,bd=49;
   for(const o of G.ore){if(o.amount>0){const dd=d2(w.x,w.z,o.x,o.z);if(dd<bd){bd=dd;node=o;}}}
   const off=offsets(units.length);
@@ -5529,72 +5590,54 @@ function smartOrder(w){
       u.order={mode:'amove'};u.dest={x:w.x+off[i].x,z:w.z+off[i].z};
     }
   });
-  sfx.move();
 }
-function orderAMove(w){
-  const units=selUnits();const off=offsets(units.length);
+function _ordAMove(units,w){
+  const off=offsets(units.length);
   units.forEach((u,i)=>{resetOrder(u);
     if(u.type==='harvester'){u.order={mode:'move'};u.manual=true;}
     else u.order={mode:'amove'};
     u.dest={x:w.x+off[i].x,z:w.z+off[i].z};});
-  sfx.move();
 }
-function orderAttack(t){
-  let any=false;
-  for(const u of selUnits()){
+function _ordAttack(units,t){
+  for(const u of units){
     if(!u.def.weapon)continue;
-    resetOrder(u);u.order={mode:'attack'};u.target=t;u.dest=null;any=true;
+    resetOrder(u);u.order={mode:'attack'};u.target=t;u.dest=null;
   }
-  if(any)sfx.attack();
 }
-function orderPatrol(w){
-  const units=selUnits();const off=offsets(units.length);
+function _ordPatrol(units,w){
+  const off=offsets(units.length);
   units.forEach((u,i)=>{
     resetOrder(u);if(u.type==='harvester')u.manual=true;
     u.order={mode:'patrol',pts:[{x:u.pos.x,z:u.pos.z},{x:w.x+off[i].x,z:w.z+off[i].z}],i:1};
     u.dest={...u.order.pts[1]};
   });
-  announce('Patrol route set');sfx.move();
 }
-function orderGuard(w){
-  const units=selUnits();const off=offsets(units.length);
+function _ordGuard(units,w){
+  const off=offsets(units.length);
   units.forEach((u,i)=>{
     resetOrder(u);if(u.type==='harvester')u.manual=true;
     const a={x:w.x+off[i].x,z:w.z+off[i].z};
     u.order={mode:'guard',anchor:a};u.dest={...a};
   });
-  announce('Holding position');sfx.move();
 }
-function orderScout(){
-  for(const u of selUnits()){
+function _ordScout(units){
+  for(const u of units){
     resetOrder(u);u.noAcq=true;u.manual=true;
     u.order={mode:'scout'};u.dest=null;u.scoutT=0;
   }
-  announce('Scouting the dark');sfx.move();
 }
-function orderStop(){
-  for(const u of selUnits()){resetOrder(u);u.order={mode:'idle'};u.dest=null;u.state=u.type==='harvester'?'idle':undefined;}
-  sfx.click();
+function _ordStop(units){
+  for(const u of units){resetOrder(u);u.order={mode:'idle'};u.dest=null;u.state=u.type==='harvester'?'idle':undefined;}
 }
-function orderBoard(apc){
-  for(const u of selUnits()){
+function _ordBoard(units,apc){
+  for(const u of units){
     if(u.def.armor!=='inf')continue;
     resetOrder(u);u.order={mode:'board'};u.target=apc;u.dest=null;
   }
-  announce('Boarding APC');sfx.move();
 }
-function enterAPC(u,apc){
-  if(apc.dead||apc.cargoUnits.length>=apc.def.cap){u.order={mode:'idle'};u.target=null;return;}
-  apc.cargoUnits.push(u);
-  u.inside=apc;u.dest=null;u.target=null;u.order={mode:'idle'};
-  scene.remove(u.mesh);
-  G.ents=G.ents.filter(e=>e!==u);
-  G.selected=G.selected.filter(e=>e!==u);
-  for(let i=0;i<3;i++)G.squads[i]=G.squads[i].filter(e=>e!==u);
-  updateCmdbar();refreshSquadUI();sfx.click();
-}
-function unloadAPCs(){
-  for(const apc of selUnits().filter(u=>u.type==='apc'&&u.cargoUnits.length)){
+function _ordUnload(apcs){
+  for(const apc of apcs){
+    if(!apc.cargoUnits||!apc.cargoUnits.length)continue;
     const off=offsets(apc.cargoUnits.length+1);
     apc.cargoUnits.forEach((u,i)=>{
       u.inside=null;
@@ -5605,20 +5648,35 @@ function unloadAPCs(){
     });
     apc.cargoUnits=[];
   }
-  announce('Squads deployed');sfx.move();updateCmdbar();
+  updateCmdbar();
+}
+function enterAPC(u,apc){
+  if(apc.dead||apc.cargoUnits.length>=apc.def.cap){u.order={mode:'idle'};u.target=null;return;}
+  apc.cargoUnits.push(u);
+  u.inside=apc;u.dest=null;u.target=null;u.order={mode:'idle'};
+  scene.remove(u.mesh);
+  G.ents=G.ents.filter(e=>e!==u);
+  G.selected=G.selected.filter(e=>e!==u);
+  for(let i=0;i<3;i++)G.squads[i]=G.squads[i].filter(e=>e!==u);
+  updateCmdbar();refreshSquadUI();
+  if(u.team===G.myTeam)sfx.click();
 }
 function setRally(w){
   const b=G.selected[0];
-  if(!b||b.cat!=='b')return;
-  b.rally={x:w.x,z:w.z};
+  if(!b||b.cat!=='b'||b.team!==G.myTeam)return;
+  announce('Rally point set');sfx.click();
+  netCmd({k:'ra',b:b.id,x:w.x,z:w.z});
+}
+function _setRally(b,x,z){
+  b.rally={x,z};
+  if(b.team!==G.myTeam)return;
   if(!b.rallyMk){
     const mk=new THREE.Group();
     mk.add(cyl(0.06,0.06,3,GUN,0,1.5,0));
     const fl=box(1.2,0.7,0.05,new THREE.MeshBasicMaterial({color:0x37e0cf}),0.6,2.6,0);
     mk.add(fl);scene.add(mk);b.rallyMk=mk;
   }
-  b.rallyMk.position.set(w.x,groundH(w.x,w.z),w.z);
-  announce('Rally point set');sfx.click();
+  b.rallyMk.position.set(x,groundH(x,z),z);
 }
 
 /* ============================ COMBAT ============================ */
@@ -5725,7 +5783,7 @@ function applyDamage(t,raw,wtype,attacker){
   if(t.team>=1&&G.ais[t.team-1]){
     const A=G.ais[t.team-1];A.provoked=G.t;
     if(attacker){A.threatX=attacker.pos.x;A.threatZ=attacker.pos.z;}
-  }else if(t.team===0&&attacker&&attacker.team!==0){
+  }else if(t.team===G.myTeam&&attacker&&attacker.team!==G.myTeam){
     if(G.t-(G.warnT||-99)>9){
       G.warnT=G.t;
       announce(t.cat==='b'?'Base under attack':'Forces under attack');
@@ -5745,7 +5803,7 @@ function gainXP(u,v){
     u.rank++;
     u.maxhp=Math.round(u.maxhp*1.3);
     u.hp=Math.min(u.maxhp,u.hp+u.maxhp*0.3);
-    if(u.team===0){announce(u.def.name+' promoted to rank '+(u.rank+1));sfx.rankup();}
+    if(u.team===G.myTeam){announce(u.def.name+' promoted to rank '+(u.rank+1));sfx.rankup();}
   }
   drawBar(u);
 }
@@ -5757,19 +5815,19 @@ function killEnt(e){
   if(e.rallyMk)scene.remove(e.rallyMk);
   if(e.cargoUnits&&e.cargoUnits.length){
     for(const u of e.cargoUnits)u.dead=true;
-    if(e.team===0)announce('APC lost with '+e.cargoUnits.length+' squads aboard');
+    if(e.team===G.myTeam)announce('APC lost with '+e.cargoUnits.length+' squads aboard');
   }
   G.selected=G.selected.filter(s=>s!==e);
   for(let i=0;i<3;i++)G.squads[i]=G.squads[i].filter(u=>u!==e);
   updateCmdbar();refreshSquadUI();
-  if(e.type==='mobilehq'&&e.team===0&&
-     !G.ents.some(o=>!o.dead&&o!==e&&o.team===0&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
+  if(e.type==='mobilehq'&&e.team===G.myTeam&&
+     !G.ents.some(o=>!o.dead&&o!==e&&o.team===G.myTeam&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
   if(e.type==='conyard'){
-    if(e.team===0&&!G.ents.some(o=>!o.dead&&o!==e&&o.team===0&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
-    else if(!G.ents.some(o=>!o.dead&&o!==e&&o.type==='conyard'&&o.team!==0))endGame(true);
+    if(e.team===G.myTeam&&!G.ents.some(o=>!o.dead&&o!==e&&o.team===G.myTeam&&(o.type==='conyard'||o.type==='mobilehq')))endGame(false);
+    else if(!G.ents.some(o=>!o.dead&&o!==e&&o.type==='conyard'&&o.team!==G.myTeam))endGame(true);
     else announce('Enemy faction eliminated');
   }
-  if(e.team===0&&e.cat==='b'){refreshSidebar();announce(e.def.name+' destroyed');}
+  if(e.team===G.myTeam&&e.cat==='b'){refreshSidebar();announce(e.def.name+' destroyed');}
 }
 
 /* ============================ UNIT / BUILDING AI ============================ */
@@ -5959,7 +6017,7 @@ function harvesterAI(u,dt){
     let best=null,bd=1e12;
     for(const o of G.ore){
       if(o.amount<=0)continue;
-      if(u.team===0&&!isExplored(o.x,o.z))continue;
+      if(!G.mpGame&&u.team===G.myTeam&&!isExplored(o.x,o.z))continue;
       const dd=d2(u.pos.x,u.pos.z,o.x,o.z);
       if(dd<bd){bd=dd;best=o;}
     }
@@ -6002,7 +6060,7 @@ function harvesterAI(u,dt){
     u.unloadT-=dt;
     if(u.unloadT<=0){
       G.credits[u.team]+=Math.round(u.cargo);
-      if(u.team===0)sfx.cash();
+      if(u.team===G.myTeam)sfx.cash();
       u.cargo=0;
       if(u.mesh.userData.load)u.mesh.userData.load.scale.y=0.05;
       u.state='idle';
@@ -6050,7 +6108,7 @@ function smoke(pos,s){
   const spr=new THREE.Sprite(new THREE.SpriteMaterial({color:0x585058,transparent:true,opacity:0.45,depthWrite:false}));
   spr.position.copy(pos);spr.position.y+=0.2;spr.scale.setScalar(s);
   scene.add(spr);
-  G.particles.push({kind:'smoke',mesh:spr,life:rand(0.6,1.1),max:1,vy:rand(1,2.2),grow:1.8});
+  G.particles.push({kind:'smoke',mesh:spr,life:vrand(0.6,1.1),max:1,vy:vrand(1,2.2),grow:1.8});
 }
 const debrisGeo=new THREE.TetrahedronGeometry(0.4,0);
 function explosion(pos,s){
@@ -6059,13 +6117,13 @@ function explosion(pos,s){
   for(let i=0;i<(big?12:6);i++){
     const m=new THREE.Mesh(debrisGeo,new THREE.MeshLambertMaterial({color:i%3?0x3a3038:0xff8a40,
       emissive:i%3?0x000000:0xd0500a}));
-    m.position.set(x,y+0.5,z);m.scale.setScalar(rand(0.5,1.4)*s*0.7);
+    m.position.set(x,y+0.5,z);m.scale.setScalar(vrand(0.5,1.4)*s*0.7);
     scene.add(m);
-    G.particles.push({kind:'debris',mesh:m,life:rand(0.5,1.0),max:1,
-      vx:rand(-7,7)*s,vy:rand(4,11)*s,vz:rand(-7,7)*s,rs:rand(4,12)});
+    G.particles.push({kind:'debris',mesh:m,life:vrand(0.5,1.0),max:1,
+      vx:vrand(-7,7)*s,vy:vrand(4,11)*s,vz:vrand(-7,7)*s,rs:vrand(4,12)});
   }
   for(let i=0;i<(big?6:2);i++)
-    smoke(new THREE.Vector3(x+rand(-1,1)*s,y+rand(0,1),z+rand(-1,1)*s),rand(0.8,1.6)*s);
+    smoke(new THREE.Vector3(x+vrand(-1,1)*s,y+vrand(0,1),z+vrand(-1,1)*s),vrand(0.8,1.6)*s);
   if(big){shake.t=0.35;shake.amp=0.5*s;sfx.boom(s);}
   else sfx.hit();
 }
@@ -6181,83 +6239,109 @@ function initSidebar(){
   refreshSidebar();
 }
 function sbClick(kind,type){
+  const T=G.myTeam, ps=G.prodStructs[T];
   if(kind==='b'){
-    if(G.prodStruct&&G.prodStruct.type===type&&G.prodStruct.left<=0){startPlace(type);sfx.click();return;}
-    if(G.prodStruct&&G.prodStruct.type===type){sbCancel(kind,type);return;}
-    if(G.prodStruct){sfx.deny();announce('Construction already in progress');return;}
+    if(ps&&ps.type===type&&ps.left<=0){startPlace(type);sfx.click();return;}
+    if(ps&&ps.type===type){sbCancel(kind,type);return;}
+    if(ps){sfx.deny();announce('Construction already in progress');return;}
     const d=BDEF[type];
-    if(d.prereq&&!hasBuilding(0,d.prereq)){sfx.deny();return;}
-    G.prodStruct={type,left:d.time,total:d.time,paid:0};
-    sfx.click();refreshSidebar();
+    if(d.prereq&&!hasBuilding(T,d.prereq)){sfx.deny();return;}
+    sfx.click();netCmd({k:'pr',kind:'b',type});
   }else{
     const d=UDEF[type];
-    if(!hasBuilding(0,d.from)){sfx.deny();announce('Requires '+BDEF[d.from].name);return;}
-    const q=G.queues[d.from];
-    if(q.length>=9){sfx.deny();return;}
-    q.push({type,left:d.time,total:d.time,paid:0});
-    sfx.click();refreshSidebar();
+    if(!hasBuilding(T,d.from)){sfx.deny();announce('Requires '+BDEF[d.from].name);return;}
+    const q=G.queues[T][d.from];
+    if(q&&q.length>=9){sfx.deny();return;}
+    sfx.click();netCmd({k:'pr',kind:'u',type});
   }
+}
+function _prodStart(team,kind,type){
+  if(kind==='b'){
+    if(G.prodStructs[team])return;
+    const d=BDEF[type];
+    if(d.prereq&&!hasBuilding(team,d.prereq))return;
+    G.prodStructs[team]={type,left:d.time,total:d.time,paid:0};
+  }else{
+    const d=UDEF[type];
+    if(!hasBuilding(team,d.from))return;
+    const q=G.queues[team][d.from]||(G.queues[team][d.from]=[]);
+    if(q.length>=9)return;
+    q.push({type,left:d.time,total:d.time,paid:0});
+  }
+  if(team===G.myTeam)refreshSidebar();
 }
 function sbCancel(kind,type){
+  sfx.click();netCmd({k:'cx',kind,type});
+}
+function _prodCancel(team,kind,type){
   if(kind==='b'){
-    if(G.prodStruct&&G.prodStruct.type===type){
-      G.credits[0]+=G.prodStruct.paid;
-      G.prodStruct=null;endPlace();
-      announce('Construction cancelled');sfx.click();refreshSidebar();
+    const ps=G.prodStructs[team];
+    if(ps&&ps.type===type){
+      G.credits[team]+=ps.paid;
+      G.prodStructs[team]=null;
+      if(team===G.myTeam){endPlace();announce('Construction cancelled');refreshSidebar();}
     }
   }else{
-    const q=G.queues[UDEF[type].from];
+    const q=G.queues[team][UDEF[type].from]||[];
     for(let i=q.length-1;i>=0;i--)if(q[i].type===type){
-      G.credits[0]+=q[i].paid;q.splice(i,1);
-      sfx.click();refreshSidebar();return;
+      G.credits[team]+=q[i].paid;q.splice(i,1);
+      if(team===G.myTeam)refreshSidebar();
+      return;
     }
   }
 }
-function prodDrain(item,cost,dt,rate){
+function prodDrain(item,cost,dt,rate,team){
   if(item.left<=0)return true;
   const want=Math.min(dt*rate,item.left);
   const pay=cost*(want/item.total);
-  if(G.credits[0]>=pay){
-    G.credits[0]-=pay;item.paid+=pay;item.left-=want;
+  if(G.credits[team]>=pay){
+    G.credits[team]-=pay;item.paid+=pay;item.left-=want;
   }
   return item.left<=0;
 }
-function prodTick(dt){
-  const rate=powerRatio(0)<1?0.5:1;
-  if(powerRatio(0)<1&&G.t-G.lowPowerMsg>18){G.lowPowerMsg=G.t;announce('Low power: production slowed, turrets offline');sfx.alert();}
-  if(G.prodStruct){
-    const wasLeft=G.prodStruct.left;
-    if(prodDrain(G.prodStruct,BDEF[G.prodStruct.type].cost,dt,rate)&&wasLeft>0){
-      sfx.ready();announce(BDEF[G.prodStruct.type].name+' ready: select it to place');
+function prodTickTeams(dt,froms){
+  const teams=G.mpGame?[0,1]:[0];
+  for(const T of teams){
+    const rate=powerRatio(T)<1?0.5:1;
+    if(T===G.myTeam&&powerRatio(T)<1&&G.t-G.lowPowerMsg>18){G.lowPowerMsg=G.t;announce('Low power: production slowed, turrets offline');sfx.alert();}
+    const ps=G.prodStructs[T];
+    if(ps){
+      const wasLeft=ps.left;
+      if(prodDrain(ps,BDEF[ps.type].cost,dt,rate,T)&&wasLeft>0){
+        if(T===G.myTeam){sfx.ready();announce(BDEF[ps.type].name+' ready: select it to place');}
+      }
     }
-  }
-  for(const from of['barracks','factory','navalyard']){
-    const q=G.queues[from];
-    if(!q.length)continue;
-    if(!hasBuilding(0,from))continue;
-    if(prodDrain(q[0],UDEF[q[0].type].cost,dt,rate)){
-      const item=q.shift();
-      const prod=G.ents.find(e=>!e.dead&&e.team===0&&e.type===from);
-      if(prod){
-        let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
-        if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
-        const u=spawnUnit(item.type,sx,sz,0);
-        const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
-        u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
-        if(item.type==='harvester'){u.order={mode:'idle'};u.dest=null;}
-        sfx.ready();mmPing(u.pos.x,u.pos.z,'#37e0cf');
+    for(const from of froms){
+      const q=G.queues[T][from];
+      if(!q||!q.length)continue;
+      if(!hasBuilding(T,from))continue;
+      if(prodDrain(q[0],UDEF[q[0].type].cost,dt,rate,T)){
+        const item=q.shift();
+        const prod=G.ents.find(e=>!e.dead&&e.team===T&&e.type===from);
+        if(prod){
+          let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
+          if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
+          const u=spawnUnit(item.type,sx,sz,T);
+          const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
+          u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
+          if(item.type==='harvester'){u.order={mode:'idle'};u.dest=null;}
+          if(T===G.myTeam){sfx.ready();mmPing(u.pos.x,u.pos.z,'#37e0cf');}
+        }
       }
     }
   }
   refreshSidebar();
+}
+function prodTick(dt){
+  prodTickTeams(dt,['barracks','factory','navalyard']);
 }
 function refreshSidebar(){
   for(const key in sbBtns){
     const{el,kind,type}=sbBtns[key];
     const d=kind==='b'?BDEF[type]:UDEF[type];
     let locked=false,lockTxt='';
-    if(kind==='b'&&d.prereq&&!hasBuilding(0,d.prereq)){locked=true;lockTxt='Needs '+BDEF[d.prereq].name;}
-    if(kind==='u'&&!hasBuilding(0,d.from)){locked=true;lockTxt='Needs '+BDEF[d.from].name;}
+    if(kind==='b'&&d.prereq&&!hasBuilding(G.myTeam,d.prereq)){locked=true;lockTxt='Needs '+BDEF[d.prereq].name;}
+    if(kind==='u'&&!hasBuilding(G.myTeam,d.from)){locked=true;lockTxt='Needs '+BDEF[d.from].name;}
     el.classList.toggle('locked',locked);
     el.querySelector('.nm').textContent=d.name;
     const pw=kind==='b'?(d.power>0?' · ⚡+'+d.power:' · ⚡'+d.power):'';
@@ -6265,14 +6349,16 @@ function refreshSidebar(){
     el.querySelector('.meta').innerHTML=locked?lockTxt:'<b>$'+d.cost+'</b> · '+d.time+'s'+pw+blurb;
     let prog=0,qn='';
     el.classList.remove('ready');
-    if(kind==='b'&&G.prodStruct&&G.prodStruct.type===type){
-      prog=1-G.prodStruct.left/G.prodStruct.total;
-      if(G.prodStruct.left<=0){el.classList.add('ready');prog=1;}
+    const myPS=G.prodStructs[G.myTeam];
+    if(kind==='b'&&myPS&&myPS.type===type){
+      prog=1-myPS.left/myPS.total;
+      if(myPS.left<=0){el.classList.add('ready');prog=1;}
     }
     if(kind==='u'){
-      const q=G.queues[d.from].filter(i=>i.type===type);
+      const qq=G.queues[G.myTeam][d.from]||[];
+      const q=qq.filter(i=>i.type===type);
       if(q.length){qn='x'+q.length;
-        const head=G.queues[d.from][0];
+        const head=qq[0];
         if(head.type===type)prog=1-head.left/head.total;
       }
     }
@@ -6361,7 +6447,7 @@ function drawMinimap(){
   for(const e of G.ents){
     if(e.dead)continue;
     if(e.team!==0&&!fog.visible[cellIdx(e.pos.x,e.pos.z)])continue;
-    mmCtx.fillStyle=e.team===0?'#37e0cf':'#ff5148';
+    mmCtx.fillStyle=e.team===G.myTeam?'#37e0cf':'#ff5148';
     const s=e.cat==='b'?4:2.5;
     mmCtx.fillRect(mx(e.pos.x)-s/2,mz(e.pos.z)-s/2,s,s);
   }
@@ -6406,6 +6492,7 @@ function buildWorld(){
   spawnOreField(90,-270,9,1);spawnOreField(-90,300,9,1);
   /* island riches: bring a Landing Craft */
   spawnOreField(500,-380,10,2);spawnOreField(530,80,12,2);spawnOreField(480,330,8,1.8);
+  if(!G.mpGame){
   /* player */
   spawnBuilding('conyard',-315,315,0);
   spawnUnit('rifleman',-309,321,0);spawnUnit('rifleman',-321,321,0);
@@ -6437,11 +6524,32 @@ function buildWorld(){
   }
   outpost(1,40,-100);outpost(2,90,180);outpost(3,-160,-60);
   cam.x=-315;cam.z=315;
+  }
   initSidebar();refreshSquadUI();
   updateFog();drawMinimap();
 }
 
 /* ============================ MAIN LOOP ============================ */
+function stepSim(dt){
+  G.t+=dt;
+  prodTick(dt);
+  if(!G.mpGame)aiTick(dt);
+  for(const e of G.ents){
+    if(e.dead)continue;
+    if(e.cat==='u')updateUnit(e,dt);else updateBuilding(e,dt);
+  }
+  G.ents=G.ents.filter(e=>!e.dead);
+  updateProjectiles(dt);
+  updateParticles(dt);
+}
+function simHash(){
+  let h=0;
+  for(const e of G.ents){
+    if(e.dead)continue;
+    h=(h+Math.imul(e.id,31)+Math.imul((e.pos.x*10)|0,7)+Math.imul((e.pos.z*10)|0,13)+(e.hp|0))|0;
+  }
+  return h>>>0;
+}
 let lastT=performance.now(),fogT=0,mmT=0,uiT=0;
 function frame(now){
   requestAnimationFrame(frame);
@@ -6449,31 +6557,23 @@ function frame(now){
   if(waterTick)waterTick(now/1000);
   if(fogU)fogU.uT.value=now/1000;
   if(G.running&&!G.over){
-    G.t+=dt;
+    if(G.mpGame&&window.NET&&NET.on)NET.pump();
+    else stepSim(dt);
     camFrame(dt);
-    prodTick(dt);
-    aiTick(dt);
     fogT-=dt;
     if(fogT<=0){fogT=0.2;updateFog();}
-    for(const e of G.ents){
-      if(e.dead)continue;
-      if(e.cat==='u')updateUnit(e,dt);else updateBuilding(e,dt);
-    }
-    G.ents=G.ents.filter(e=>!e.dead);
-    updateProjectiles(dt);
-    updateParticles(dt);
     mmT-=dt;
     if(mmT<=0){mmT=0.15;drawMinimap();}
     uiT-=dt;
     if(uiT<=0){
       uiT=0.3;
-      document.getElementById('creditval').textContent=Math.floor(G.credits[0]);
-      const p=powerStats(0);
+      document.getElementById('creditval').textContent=Math.floor(G.credits[G.myTeam]);
+      const p=powerStats(G.myTeam);
       document.getElementById('powerlabel').textContent='Power '+p.sup+' / '+p.dr;
       const r=p.dr===0?1:clamp(p.sup/p.dr,0,1.6)/1.6;
       const pf=document.getElementById('powerfill');
       pf.style.width=(r*100)+'%';
-      pf.style.background=powerRatio(0)<1?'#ff5148':'#37e0cf';
+      pf.style.background=powerRatio(G.myTeam)<1?'#ff5148':'#37e0cf';
       const mm=Math.floor(G.t/60),ss=Math.floor(G.t%60);
       document.getElementById('clockval').textContent=(mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
       if(G.selected.length)updateCmdbar();
@@ -6481,8 +6581,8 @@ function frame(now){
     }
     if(shake.t>0){
       shake.t-=dt;
-      camera.position.x+=rand(-1,1)*shake.amp*shake.t;
-      camera.position.y+=rand(-1,1)*shake.amp*shake.t;
+      camera.position.x+=vrand(-1,1)*shake.amp*shake.t;
+      camera.position.y+=vrand(-1,1)*shake.amp*shake.t;
     }
   }
   renderer.render(scene,camera);
@@ -6819,15 +6919,25 @@ function findNearbyDeploy(x0,z0){
 }
 function deployMobileHQ(){
   const u=G.selected.length===1&&G.selected[0];
-  if(!u||u.type!=='mobilehq')return;
+  if(!u||u.type!=='mobilehq'||u.team!==G.myTeam)return;
   const spot=findNearbyDeploy(u.pos.x,u.pos.z);
   if(!spot){announce('No open ground nearby: move the HQ to flatter terrain');sfx.deny();return;}
+  sfx.place();
+  netCmd({k:'dp',id:u.id});
+}
+function _deployHQ(u){
+  const spot=findNearbyDeploy(u.pos.x,u.pos.z);
+  if(!spot)return;
+  const team=u.team;
   u.dead=true;scene.remove(u.mesh);
-  G.ents=G.ents.filter(e=>e!==u);G.selected=[];
-  const cy=spawnBuilding('conyard',spot.x,spot.z,0,true);
-  setSelection([cy]);
-  announce('Mobile HQ deployed: base online');
-  sfx.place();refreshSidebar();
+  G.ents=G.ents.filter(e=>e!==u);
+  G.selected=G.selected.filter(e=>e!==u);
+  const cy=spawnBuilding('conyard',spot.x,spot.z,team,true);
+  if(team===G.myTeam){
+    setSelection([cy]);
+    announce('Mobile HQ deployed: base online');
+    refreshSidebar();
+  }
 }
 CB.cDeploy=document.getElementById('cDeploy');
 CB.cDeploy.onclick=()=>deployMobileHQ();
@@ -6839,7 +6949,7 @@ updateCmdbar=function(){
   if(!sel.length)return;
   const units=sel.filter(e=>e.cat==='u');
   const allInf=units.length&&units.every(u=>u.def.armor==='inf'&&u.def.domain!=='air');
-  const anyTr=G.ents.some(e=>!e.dead&&e.team===0&&e.def.cap&&e.cargoUnits&&e.cargoUnits.length<e.def.cap);
+  const anyTr=G.ents.some(e=>!e.dead&&e.team===G.myTeam&&e.def.cap&&e.cargoUnits&&e.cargoUnits.length<e.def.cap);
   CB.cBoard.classList.toggle('off',!(allInf&&anyTr));
   CB.cUnload.classList.toggle('off',!units.some(u=>u.def.cap&&u.cargoUnits&&u.cargoUnits.length));
   const PRODS=['barracks','factory','navalyard','dronebay','robotics','ewcenter','airfield'];
@@ -6856,41 +6966,15 @@ updateCmdbar=function(){
 const _killEnt=killEnt;
 killEnt=function(e){
   _killEnt(e);
-  if(e.team===0&&e.type==='mobilehq'&&!G.over){
-    const alive=G.ents.some(o=>!o.dead&&o.team===0&&(o.type==='conyard'||o.type==='mobilehq'));
+  if(e.team===G.myTeam&&e.type==='mobilehq'&&!G.over){
+    const alive=G.ents.some(o=>!o.dead&&o.team===G.myTeam&&(o.type==='conyard'||o.type==='mobilehq'));
     if(!alive)endGame(false);
   }
 };
 
 /* ---------- production from the new structures ---------- */
 prodTick=function(dt){
-  const rate=powerRatio(0)<1?0.5:1;
-  if(powerRatio(0)<1&&G.t-G.lowPowerMsg>18){G.lowPowerMsg=G.t;announce('Low power: production slowed, turrets offline');sfx.alert();}
-  if(G.prodStruct){
-    const wasLeft=G.prodStruct.left;
-    if(prodDrain(G.prodStruct,BDEF[G.prodStruct.type].cost,dt,rate)&&wasLeft>0){
-      sfx.ready();announce(BDEF[G.prodStruct.type].name+' ready: select it to place');
-    }
-  }
-  for(const from of ['barracks','factory','navalyard','dronebay','robotics','ewcenter','airfield']){
-    const q=G.queues[from];
-    if(!q||!q.length)continue;
-    if(!hasBuilding(0,from))continue;
-    if(prodDrain(q[0],UDEF[q[0].type].cost,dt,rate)){
-      const item=q.shift();
-      const prod=G.ents.find(e=>!e.dead&&e.team===0&&e.type===from);
-      if(prod){
-        let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
-        if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
-        const u=spawnUnit(item.type,sx,sz,0);
-        const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
-        u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
-        if(item.type==='harvester'){u.order={mode:'idle'};u.dest=null;}
-        sfx.ready();mmPing(u.pos.x,u.pos.z,'#37e0cf');
-      }
-    }
-  }
-  refreshSidebar();
+  prodTickTeams(dt,['barracks','factory','navalyard','dronebay','robotics','ewcenter','airfield']);
 };
 
 /* ---------- terrain dressing ---------- */
@@ -6932,6 +7016,12 @@ buildWorld=function(){
   const pcy=G.ents.find(e=>!e.dead&&e.team===0&&e.type==='conyard');
   if(pcy){pcy.dead=true;scene.remove(pcy.mesh);G.ents=G.ents.filter(e=>e!==pcy);}
   addTerrainDressing();
+  /* richer, wider economy (shared with skirmish) */
+  spawnOreField(354,156,12,1.25);spawnOreField(348,246,10,1.1);
+  spawnOreField(312,144,14,1.45);spawnOreField(270,198,10,1.2);spawnOreField(360,282,8,1.2);
+  spawnOreField(-96,264,12,1.1);spawnOreField(102,246,12,1.1);
+  spawnOreField(-288,-60,10,1.15);spawnOreField(282,-6,10,1.25);
+  if(G.mpGame){mpSymmetricStart();return;}
   /* convoy */
   const hq=spawnUnit('mobilehq',-286,282,0);
   const e1=spawnUnit('apc',-292,288,0);
@@ -6944,11 +7034,6 @@ buildWorld=function(){
   /* naval escort waiting off the coast */
   const boat=spawnUnit('gunboat',468,300,0);boat.dest={x:462,z:292};boat.order={mode:'guard',anchor:{x:462,z:292}};
   const craft=spawnUnit('landingcraft',464,314,0);craft.dest={x:460,z:306};craft.order={mode:'guard',anchor:{x:460,z:306}};
-  /* richer, wider economy */
-  spawnOreField(354,156,12,1.25);spawnOreField(348,246,10,1.1);
-  spawnOreField(312,144,14,1.45);spawnOreField(270,198,10,1.2);spawnOreField(360,282,8,1.2);
-  spawnOreField(-96,264,12,1.1);spawnOreField(102,246,12,1.1);
-  spawnOreField(-288,-60,10,1.15);spawnOreField(282,-6,10,1.25);
   /* enemy drone tech */
   spawnBuilding('dronebay',329,-441,1);
   spawnBuilding('robotics',336,-429,1);
@@ -6970,6 +7055,24 @@ buildWorld=function(){
   setSelection([hq]);
   announce('Convoy inbound: reach open ground and press DEP to deploy the Mobile HQ');
 };
+
+function mpSymmetricStart(){
+  const bases=[{x:-315,z:315},{x:315,z:-420}];
+  for(let T=0;T<2;T++){
+    const b=bases[T], f=T===0?-1:1;
+    spawnBuilding('conyard',b.x,b.z,T);
+    spawnBuilding('power',b.x-16,b.z-12*f,T);
+    spawnBuilding('refinery',b.x+16,b.z-10*f,T);
+    spawnUnit('harvester',b.x+16,b.z-17*f,T);
+    for(let i=0;i<3;i++)spawnUnit('rifleman',b.x-8+i*8,b.z+16*f,T);
+    G.credits[T]=8000;
+  }
+  const me=bases[G.myTeam];
+  cam.x=me.x;cam.z=me.z;
+  const cy=G.ents.find(e=>e.team===G.myTeam&&e.type==='conyard');
+  if(cy)setSelection([cy]);
+  announce('Skirmish: destroy the enemy base');
+}
 
 /* ---------- AI: drone reserve and staged raids ---------- */
 const _aiTick=aiTick;
@@ -7125,184 +7228,176 @@ aiTick=function(dt){
 
 
 /* ============================================================
-   v05i_net.js  -  Dusk multiplayer client (lobby + seed handshake)
-   Connects to the dusk-mp worker (Durable Object rooms). Opt-in:
-   nothing runs until the player opens the lobby or the URL carries
-   ?mp=CODE, so single-player is completely unaffected.
-
-   Set the worker URL once after deploying dusk-mp:
-     window.DUSK_MP_URL = 'https://dusk-mp.<subdomain>.workers.dev';
+   v2 lockstep multiplayer: deterministic sim, DO-stamped ticks
    ============================================================ */
-(function () {
-  'use strict';
-  if (window.DuskNet) return;
+const NET=(function(){
+  const API=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'https://api.broken-meridian.com':'https://api.broken-meridian.com';
+  const NET_DT=1/30, STEPS_PER_TICK=2, HASH_EVERY=75, MAX_CATCHUP=30;
+  const N={on:false,ws:null,slot:0,seed:0,max:2,code:'',region:'',buf:[],tick:-1,ping:0,pollT:null,ready:false,players:[]};
 
-  var CFG = (window.DUSK_MP_URL || 'https://api.broken-meridian.com').replace(/\/+$/, '');
-  function httpBase() { return CFG; }
-  function wsBase() { return CFG.replace(/^http/, 'ws'); }
-
-  var Net = {
-    active: false, ws: null, role: null, slot: -1, host: -1,
-    seed: null, code: null, max: 2, players: [], name: 'Cmdr',
-    onSnap: null, onEv: null,           // set by the sim layer later
-  };
-  window.DuskNet = Net;
-
-  /* ---- tiny DOM helpers ---- */
-  function el(tag, css, txt) { var e = document.createElement(tag); if (css) e.style.cssText = css; if (txt != null) e.textContent = txt; return e; }
-  function post(path, body) {
-    return fetch(httpBase() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) { return r.json(); });
+  /* ---------- lobby UI ---------- */
+  let panel=null;
+  function el(tag,css,html){const e=document.createElement(tag);if(css)e.style.cssText=css;if(html!=null)e.innerHTML=html;return e;}
+  function buildPanel(){
+    if(panel)return panel;
+    panel=el('div','position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(10,8,16,0.82);backdrop-filter:blur(3px);font-family:inherit;');
+    const card=el('div','width:min(480px,92vw);max-height:86vh;overflow:auto;background:linear-gradient(180deg,#221c33,#161022);border:1px solid #4a3f66;border-radius:12px;padding:18px 18px 14px;color:#e8dfd0;box-shadow:0 18px 60px rgba(0,0,0,.6);');
+    card.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div style="font-size:18px;letter-spacing:2px;color:#f0a24a;font-weight:700">SKIRMISH LOBBY</div>'+
+      '<button id="mpClose" style="background:none;border:0;color:#9a8fb0;font-size:20px;cursor:pointer">&times;</button></div>'+
+      '<div id="mpHome">'+
+        '<input id="mpName" placeholder="Commander name" maxlength="14" style="width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid #4a3f66;background:#120d1d;color:#e8dfd0;margin-bottom:8px">'+
+        '<div style="display:flex;gap:8px;margin-bottom:12px">'+
+          '<button id="mpCreate" class="bigbtn" style="flex:1">Create Match</button>'+
+          '<input id="mpCode" placeholder="CODE" maxlength="4" style="width:76px;text-transform:uppercase;text-align:center;border-radius:8px;border:1px solid #4a3f66;background:#120d1d;color:#e8dfd0">'+
+          '<button id="mpJoin" class="bigbtn" style="width:84px">Join</button>'+
+        '</div>'+
+        '<div style="font-size:12px;color:#9a8fb0;margin-bottom:6px;letter-spacing:1px">OPEN MATCHES</div>'+
+        '<div id="mpList" style="min-height:60px"></div>'+
+      '</div>'+
+      '<div id="mpRoom" style="display:none">'+
+        '<div style="text-align:center;margin:6px 0 4px;font-size:13px;color:#9a8fb0">ROOM CODE</div>'+
+        '<div id="mpRoomCode" style="text-align:center;font-size:34px;letter-spacing:10px;color:#f0a24a;font-weight:700;margin-bottom:6px"></div>'+
+        '<div id="mpRoomInfo" style="text-align:center;font-size:12px;color:#9a8fb0;margin-bottom:10px"></div>'+
+        '<div id="mpPlayers" style="margin-bottom:12px"></div>'+
+        '<button id="mpReady" class="bigbtn" style="width:100%">Ready</button>'+
+      '</div>'+
+      '<div id="mpStatus" style="margin-top:10px;font-size:12px;color:#9a8fb0;min-height:16px"></div>';
+    panel.appendChild(card);
+    document.body.appendChild(panel);
+    panel.querySelector('#mpClose').onclick=closeLobby;
+    panel.querySelector('#mpCreate').onclick=createRoom;
+    panel.querySelector('#mpJoin').onclick=()=>{const c=panel.querySelector('#mpCode').value.trim().toUpperCase();if(c.length===4)joinRoom(c);};
+    panel.querySelector('#mpReady').onclick=toggleReady;
+    return panel;
   }
+  function status(msg){if(panel)panel.querySelector('#mpStatus').textContent=msg||'';}
+  function pName(){const v=(panel&&panel.querySelector('#mpName').value.trim())||'';return v||('Commander '+Math.floor(Math.random()*90+10));}
 
-  /* ---- overlay UI ---- */
-  var ui = {};
-  function buildUI() {
-    var wrap = el('div', 'position:fixed;inset:0;z-index:9000;display:none;align-items:center;justify-content:center;background:rgba(8,6,14,.72);font-family:system-ui,Segoe UI,Roboto,sans-serif;');
-    var panel = el('div', 'width:min(520px,92vw);background:#181026;border:1px solid #37e0cf55;border-radius:14px;padding:20px 22px;color:#e7e2f0;box-shadow:0 18px 60px #000a;');
-    panel.appendChild(el('div', 'font-size:20px;font-weight:700;letter-spacing:.5px;color:#37e0cf;margin-bottom:2px;', 'DUSK  Multiplayer'));
-    ui.sub = el('div', 'font-size:12px;color:#a99fc0;margin-bottom:14px;', 'Create a room or join with a code.');
-    panel.appendChild(ui.sub);
-
-    var row = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;');
-    ui.nameIn = el('input'); ui.nameIn.value = Net.name; ui.nameIn.placeholder = 'Callsign';
-    ui.nameIn.style.cssText = 'flex:1 1 130px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
-    ui.maxSel = el('select'); [2, 3, 4].forEach(function (n) { var o = el('option', '', n + ' players'); o.value = n; ui.maxSel.appendChild(o); });
-    ui.maxSel.style.cssText = 'padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;';
-    row.appendChild(ui.nameIn); row.appendChild(ui.maxSel); panel.appendChild(row);
-
-    var row2 = el('div', 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;');
-    ui.create = btn('Create room', '#37e0cf', '#04241f');
-    ui.codeIn = el('input'); ui.codeIn.placeholder = 'CODE'; ui.codeIn.maxLength = 6;
-    ui.codeIn.style.cssText = 'width:96px;padding:9px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;text-transform:uppercase;letter-spacing:2px;';
-    ui.join = btn('Join', '#ffb44a', '#2a1600');
-    row2.appendChild(ui.create); row2.appendChild(ui.codeIn); row2.appendChild(ui.join); panel.appendChild(row2);
-
-    ui.list = el('div', 'min-height:70px;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:10px;');
-    panel.appendChild(ui.list);
-
-    ui.chatLog = el('div', 'height:78px;overflow:auto;background:#0f0a1c;border:1px solid #2a2440;border-radius:8px;padding:6px 9px;font-size:12px;color:#c9c2dc;margin-bottom:8px;display:none;');
-    panel.appendChild(ui.chatLog);
-    ui.chatIn = el('input'); ui.chatIn.placeholder = 'Message (Enter)';
-    ui.chatIn.style.cssText = 'width:100%;padding:8px;border-radius:8px;border:1px solid #3a3350;background:#0f0a1c;color:#fff;margin-bottom:12px;display:none;';
-
-    panel.appendChild(ui.chatIn);
-
-    var foot = el('div', 'display:flex;gap:8px;justify-content:flex-end;');
-    ui.ready = btn('Ready', '#8f7bd6', '#160a26'); ui.ready.style.display = 'none';
-    ui.start = btn('Start match', '#37e0cf', '#04241f'); ui.start.style.display = 'none';
-    ui.close = btn('Close', '#3a3350', '#fff');
-    foot.appendChild(ui.ready); foot.appendChild(ui.start); foot.appendChild(ui.close);
-    panel.appendChild(foot);
-
-    wrap.appendChild(panel); document.body.appendChild(wrap); ui.wrap = wrap;
-
-    ui.create.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; createRoom(+ui.maxSel.value); };
-    ui.join.onclick = function () { Net.name = ui.nameIn.value.slice(0, 16) || 'Cmdr'; var c = ui.codeIn.value.trim().toUpperCase(); if (c) joinRoom(c); };
-    ui.close.onclick = function () { wrap.style.display = 'none'; };
-    ui.ready.onclick = function () { Net._ready = !Net._ready; ui.ready.textContent = Net._ready ? 'Not ready' : 'Ready'; sendMsg({ type: 'ready', ready: Net._ready, name: Net.name, faction: Net.slot }); };
-    ui.start.onclick = function () { sendMsg({ type: 'start' }); };
-    ui.chatIn.onkeydown = function (e) { if (e.key === 'Enter' && ui.chatIn.value.trim()) { sendMsg({ type: 'chat', text: ui.chatIn.value }); ui.chatIn.value = ''; } };
+  function openLobby(){
+    if(typeof built!=='undefined'&&built){alert('Reload the page before joining multiplayer.');return;}
+    buildPanel().style.display='flex';
+    refreshRooms();
+    N.pollT=setInterval(refreshRooms,3500);
   }
-  function btn(txt, bg, fg) { var b = el('button', 'padding:9px 14px;border:none;border-radius:8px;background:' + bg + ';color:' + fg + ';font-weight:600;cursor:pointer;', txt); return b; }
-
-  function openLobby() { if (!CFG) { alert('Multiplayer is not configured yet.\nDeploy the dusk-mp worker, then set window.DUSK_MP_URL.'); return; } if (!ui.wrap) buildUI(); ui.wrap.style.display = 'flex'; }
-  Net.openLobby = openLobby;
-
-  /* ---- lobby / connection ---- */
-  function createRoom(max) {
-    ui.sub.textContent = 'Creating room...';
-    post('/room', { max: max }).then(function (r) {
-      if (!r || !r.code) { ui.sub.textContent = 'Could not create room.'; return; }
-      connect(r.code, r.seed, max, true);
-    }).catch(function () { ui.sub.textContent = 'Network error. Check DUSK_MP_URL.'; });
+  function closeLobby(){
+    if(panel)panel.style.display='none';
+    if(N.pollT){clearInterval(N.pollT);N.pollT=null;}
+    if(N.ws&&!N.on){N.ws.close();N.ws=null;}
   }
-  function joinRoom(code) { ui.sub.textContent = 'Joining ' + code + '...'; connect(code, null, null, false); }
-
-  function connect(code, seed, max, asCreator) {
-    if (Net.ws) try { Net.ws.close(); } catch (e) {}
-    var q = '?room=' + encodeURIComponent(code) + '&name=' + encodeURIComponent(Net.name);
-    if (seed != null) q += '&seed=' + (seed >>> 0);
-    if (max) q += '&max=' + max;
-    var ws = new WebSocket(wsBase() + '/ws' + q);
-    Net.ws = ws; Net.code = code;
-    ws.onopen = function () { if (ui.sub) ui.sub.textContent = 'Connected to ' + code + '.'; };
-    ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } handle(m); };
-    ws.onclose = function () { if (Net.active) banner('Disconnected from room.'); else if (ui.sub) ui.sub.textContent = 'Connection closed.'; };
-    ws.onerror = function () { if (ui.sub) ui.sub.textContent = 'Connection error.'; };
+  async function refreshRooms(){
+    if(!panel||panel.style.display==='none'||N.ws)return;
+    try{
+      const r=await fetch(API+'/rooms');const d=await r.json();
+      const list=panel.querySelector('#mpList');
+      if(!d.rooms.length){list.innerHTML='<div style="color:#665d7d;font-size:13px;padding:8px 2px">No open matches. Create one.</div>';return;}
+      list.innerHTML='';
+      for(const rm of d.rooms){
+        const row=el('div','display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #392f52;border-radius:8px;margin-bottom:6px;background:#1a1428;');
+        row.innerHTML='<div><b style="color:#e8dfd0">'+rm.name.replace(/[<>&]/g,'')+'</b> <span style="color:#665d7d;font-size:11px">'+rm.region+'</span></div>'+
+          '<div style="display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#9a8fb0">'+rm.players+'/'+rm.max+'</span><button class="bigbtn" style="padding:5px 14px;font-size:12px">Join</button></div>';
+        row.querySelector('button').onclick=()=>joinRoom(rm.code);
+        list.appendChild(row);
+      }
+    }catch(e){status('Lobby unreachable');}
   }
-  function sendMsg(o) { try { Net.ws && Net.ws.readyState === 1 && Net.ws.send(JSON.stringify(o)); } catch (e) {} }
-  Net.send = sendMsg;
-
-  function handle(m) {
-    switch (m.type) {
-      case 'welcome':
-        Net.slot = m.you; Net.host = m.host; Net.seed = m.seed; Net.code = m.code; Net.max = m.max;
-        Net.role = (m.you === m.host) ? 'host' : 'client'; Net.players = m.players || [];
-        renderLobby(); showLobbyControls(); break;
-      case 'lobby': Net.players = m.players || []; Net.host = m.host; renderLobby(); showLobbyControls(); break;
-      case 'start': beginMatch(m.seed); break;
-      case 'chat': chatLine((m.name || ('P' + m.from)) + ': ' + m.text); break;
-      case 'leave': chatLine('slot ' + m.slot + ' left'); break;
-      case 'host_left': banner('Host left. Match ended.'); break;
-      case 'order': if (Net.onOrder) Net.onOrder(m.from, m.order); break;
-      case 'snap': if (Net.onSnap) Net.onSnap(m); break;
-      case 'ev': if (Net.onEv) Net.onEv(m.ev); break;
-      case 'error': if (ui.sub) ui.sub.textContent = 'Room error: ' + m.reason; break;
+  async function createRoom(){
+    status('Creating room...');
+    try{
+      const r=await fetch(API+'/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:pName()+"'s match",public:true})});
+      const d=await r.json();
+      if(!d.code){status('Create failed');return;}
+      joinRoom(d.code);
+    }catch(e){status('Create failed: '+e.message);}
+  }
+  function joinRoom(code){
+    status('Connecting to '+code+'...');
+    const ws=new WebSocket(API.replace('https','wss')+'/ws?room='+code);
+    N.ws=ws;N.code=code;
+    ws.onopen=()=>{ws.send(JSON.stringify({t:'hello',name:pName()}));ws.send(JSON.stringify({t:'ping',ts:Date.now()}));};
+    ws.onerror=()=>status('Connection failed');
+    ws.onclose=()=>{
+      if(N.on&&!G.over){announce('Connection lost');}
+      if(!N.on){N.ws=null;status('Disconnected');showHome();}
+    };
+    ws.onmessage=e=>onMsg(JSON.parse(e.data));
+  }
+  function showHome(){
+    if(!panel)return;
+    panel.querySelector('#mpHome').style.display='';
+    panel.querySelector('#mpRoom').style.display='none';
+  }
+  function showRoom(){
+    panel.querySelector('#mpHome').style.display='none';
+    panel.querySelector('#mpRoom').style.display='';
+    panel.querySelector('#mpRoomCode').textContent=N.code;
+    panel.querySelector('#mpRoomInfo').textContent='Region '+N.region+(N.ping?' · ping '+N.ping+'ms':'');
+    const pl=panel.querySelector('#mpPlayers');pl.innerHTML='';
+    for(let i=0;i<N.max;i++){
+      const p=N.players.find(q=>q.slot===i);
+      const row=el('div','display:flex;justify-content:space-between;padding:7px 10px;border:1px solid #392f52;border-radius:8px;margin-bottom:6px;background:#1a1428;font-size:13px;');
+      row.innerHTML=p?('<span>'+(p.name||'Player '+(i+1)).replace(/[<>&]/g,'')+(i===N.slot?' <span style="color:#665d7d">(you)</span>':'')+'</span><span style="color:'+(p.ready?'#37e0cf':'#9a8fb0')+'">'+(p.ready?'READY':'waiting')+'</span>')
+                     :'<span style="color:#665d7d">Open slot</span><span></span>';
+      pl.appendChild(row);
     }
   }
-
-  function renderLobby() {
-    if (!ui.list) return;
-    ui.list.innerHTML = '';
-    ui.list.appendChild(el('div', 'color:#37e0cf;font-weight:600;margin-bottom:4px;', 'Room ' + (Net.code || '') + '  (' + Net.players.length + '/' + Net.max + ')'));
-    Net.players.forEach(function (p) {
-      var line = (p.host ? 'HOST ' : '     ') + '[' + p.slot + '] ' + p.name + (p.ready ? '  ready' : '');
-      ui.list.appendChild(el('div', 'color:' + (p.slot === Net.slot ? '#fff' : '#b9b1d0') + ';', line));
-    });
+  function toggleReady(){
+    N.ready=!N.ready;
+    N.ws.send(JSON.stringify({t:'ready',v:N.ready}));
+    panel.querySelector('#mpReady').textContent=N.ready?'Waiting for opponent...':'Ready';
   }
-  function showLobbyControls() {
-    if (!ui.ready) return;
-    ui.chatLog.style.display = ui.chatIn.style.display = 'block';
-    ui.ready.style.display = 'inline-block';
-    ui.start.style.display = (Net.role === 'host') ? 'inline-block' : 'none';
-    ui.sub.textContent = (Net.role === 'host') ? 'You are host. Start when ready.' : 'Waiting for host to start.';
+  function onMsg(m){
+    switch(m.t){
+      case 'joined':
+        N.slot=m.slot;N.seed=m.seed;N.max=m.max;N.region=m.region;N.players=m.players||[];
+        status('');showRoom();break;
+      case 'players':N.players=m.players;showRoom();break;
+      case 'pong':N.ping=Date.now()-m.ts;if(panel&&panel.style.display!=='none')showRoom();break;
+      case 'begin':begin(m);break;
+      case 'tick':N.buf.push(m);break;
+      case 'desync':
+        if(!N.desynced){N.desynced=true;announce('DESYNC DETECTED at tick '+m.tick);console.warn('desync',m);}
+        break;
+      case 'left':
+        if(N.on&&!G.over){announce('Opponent disconnected');endGame(true);}
+        else{N.players=N.players.filter(p=>p.slot!==m.slot);showRoom();}
+        break;
+    }
   }
-  function chatLine(t) { if (!ui.chatLog) return; var d = el('div', '', t); ui.chatLog.appendChild(d); ui.chatLog.scrollTop = ui.chatLog.scrollHeight; }
-
-  /* ---- match handshake: reload into the shared seeded world ---- */
-  function beginMatch(seed) {
-    var host = (Net.role === 'host') ? 1 : 0;
-    var url = location.pathname + '?seed=' + (seed >>> 0) + '&mp=' + encodeURIComponent(Net.code) + '&slot=' + Net.slot + '&host=' + host;
-    location.href = url; // head seed reader rebuilds identical terrain; we auto-reconnect on load
+  function begin(m){
+    if(N.pollT){clearInterval(N.pollT);N.pollT=null;}
+    if(panel)panel.style.display='none';
+    G.mpGame=true;
+    G.myTeam=N.slot;
+    seedRng(m.seed||N.seed);
+    N.on=true;N.tick=-1;N.buf=[];
+    startOrResume();
+    announce('Match started: you are '+(G.myTeam===0?'CYAN (south-west)':'CYAN (north-east)'));
   }
-
-  function banner(txt) {
-    var b = document.getElementById('dusk-mp-banner') || el('div', 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:9500;background:#181026cc;border:1px solid #37e0cf55;color:#cfeee9;padding:6px 12px;border-radius:8px;font:600 12px system-ui;');
-    b.id = 'dusk-mp-banner'; b.textContent = txt; if (!b.parentNode) document.body.appendChild(b);
+  /* ---------- lockstep pump: consume stamped ticks ---------- */
+  function pump(){
+    let done=0;
+    while(N.buf.length&&done<MAX_CATCHUP){
+      const tk=N.buf.shift();done++;
+      for(let slot=0;slot<N.max;slot++){
+        const list=tk.cmds&&tk.cmds[slot];
+        if(list)for(const c of list){try{execCmd(slot,c);}catch(e){console.error('cmd fail',c,e);}}
+      }
+      for(let i=0;i<STEPS_PER_TICK;i++)stepSim(NET_DT);
+      N.tick=tk.n;
+      if(N.tick>0&&N.tick%HASH_EVERY===0&&N.ws&&N.ws.readyState===1){
+        N.ws.send(JSON.stringify({t:'hash',tick:N.tick,h:String(simHash())}));
+      }
+    }
   }
-
-  /* ---- launcher button + auto-reconnect ---- */
-  function addLauncher() {
-    if (document.getElementById('dusk-mp-btn')) return;
-    var b = el('button', 'position:fixed;top:10px;right:12px;z-index:8000;padding:8px 12px;border:1px solid #37e0cf66;border-radius:8px;background:#181026cc;color:#37e0cf;font:600 12px system-ui;cursor:pointer;', 'Multiplayer');
-    b.id = 'dusk-mp-btn'; b.onclick = openLobby; document.body.appendChild(b);
+  function sendCmd(c){
+    if(N.ws&&N.ws.readyState===1)N.ws.send(JSON.stringify({t:'cmd',c:[c]}));
   }
-
-  function autoReconnect() {
-    var q; try { q = new URLSearchParams(location.search); } catch (e) { return; }
-    var code = q.get('mp'); if (!code) return;
-    Net.active = true; Net.slot = +(q.get('slot') || 0); Net.role = (q.get('host') === '1') ? 'host' : 'client';
-    Net.seed = (q.get('seed') >>> 0);
-    banner('MP room ' + code.toUpperCase() + '  slot ' + Net.slot + '  (' + Net.role + ')');
-    if (CFG) connect(code.toUpperCase(), Net.seed, null, false);
-    // NOTE: live battle sync (orders in, snapshots out) attaches here via
-    // Net.onOrder / Net.onSnap / Net.sendOrder once validated against the
-    // deployed worker. Presence, chat and the shared seeded map work now.
-  }
-
-  function boot() { addLauncher(); autoReconnect(); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  return {get on(){return N.on;},pump,sendCmd,openLobby,state:N};
 })();
+window.NET=NET;
+document.getElementById('mpbtn').addEventListener('click',()=>{try{ensureAudio();}catch(e){}NET.openLobby();});
 
 /* ============================ START / END ============================ */
 function endGame(win){

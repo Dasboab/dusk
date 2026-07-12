@@ -1,248 +1,227 @@
 /* ============================================================
-   Dusk multiplayer worker  (dusk-mp)
-   - Lobby: create room, join by code, optional public listing (KV)
-   - Realtime: WebSocket relay via a Durable Object (GameRoom)
-   - Model: host-authoritative. First player in a room is the host and
-     runs the authoritative sim; the room relays orders up to the host
-     and snapshots/events down to the other players.
-   This worker is standalone and does NOT touch the existing `dusk`
-   worker (auth / leaderboard / cloud saves / Stripe). It can be merged
-   into that worker later if desired.
+   Broken Meridian multiplayer worker (dusk-mp) v2
+   Deterministic lockstep relay.
+   - Rooms are Durable Objects placed near their creator (locationHint).
+   - The room does no game logic: it stamps player commands into
+     numbered net ticks and broadcasts them at 15Hz. Every client
+     runs the identical sim from a shared seed.
+   - Lobby: public room list held in a singleton registry DO.
+   - Desync detection via periodic state hashes.
    ============================================================ */
 
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no I,L,O,0,1
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 function makeCode(n = 4) {
-  let s = '';
-  const a = new Uint8Array(n);
+  let s = ''; const a = new Uint8Array(n);
   crypto.getRandomValues(a);
   for (let i = 0; i < n; i++) s += CODE_ALPHABET[a[i] % CODE_ALPHABET.length];
   return s;
 }
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Max-Age': '86400',
 };
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
-  });
+const json = (o, s = 200) =>
+  new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json', ...CORS } });
+
+const HINTS = { NA: 'enam', SA: 'sam', EU: 'weur', AS: 'apac', OC: 'oc', AF: 'afr' };
+const REGION_LABEL = { enam: 'NA', sam: 'SA', weur: 'EU', apac: 'ASIA', oc: 'OCE', afr: 'AFR' };
+
+function regionOf(request) {
+  const c = request.cf && request.cf.continent;
+  return HINTS[c] || 'weur';
+}
+const LOBBY = 'lobby-v1';
+function lobbyStub(env) { return env.ROOMS.get(env.ROOMS.idFromName(LOBBY)); }
+function roomStub(env, code, hint) {
+  return env.ROOMS.get(env.ROOMS.idFromName('room-' + code), hint ? { locationHint: hint } : undefined);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
-
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
-    if (path === '/' || path === '/health') {
-      return json({ ok: true, service: 'dusk-mp', ts: Date.now() });
-    }
+    if (path === '/' || path === '/health')
+      return json({ ok: true, service: 'bm-mp', v: 2, region: regionOf(request), ts: Date.now() });
 
-    // Create a room: returns a fresh join code. The Durable Object is
-    // created lazily on the first WebSocket connect.
     if (path === '/room' && request.method === 'POST') {
-      let body = {};
-      try { body = await request.json(); } catch (e) {}
+      let body = {}; try { body = await request.json(); } catch (e) {}
       const code = makeCode(4);
+      const hint = regionOf(request);
       const seed = (body.seed >>> 0) || (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0);
-      const max = Math.max(2, Math.min(4, body.max | 0 || 2));
-      return json({ code, seed, max, ws: `/ws?room=${code}` });
+      const max = Math.max(2, Math.min(4, (body.max | 0) || 2));
+      const name = String(body.name || 'Skirmish').slice(0, 24);
+      const pub = !!body.public;
+      const stub = roomStub(env, code, hint);
+      await stub.fetch('https://do/init', {
+        method: 'POST',
+        body: JSON.stringify({ code, seed, max, name, pub, region: REGION_LABEL[hint] || hint }),
+      });
+      return json({ code, seed, max, region: REGION_LABEL[hint] || hint, ws: '/ws?room=' + code });
     }
 
-    // Public lobby listing (best-effort; requires the optional LOBBY KV binding).
     if (path === '/rooms' && request.method === 'GET') {
-      if (!env.LOBBY) return json({ rooms: [] });
-      try {
-        const list = await env.LOBBY.list({ prefix: 'room:' });
-        const rooms = [];
-        for (const k of list.keys) {
-          const v = await env.LOBBY.get(k.name);
-          if (!v) continue;
-          const r = JSON.parse(v);
-          if (!r.started && (r.players || 0) < (r.max || 2)) rooms.push(r);
-        }
-        rooms.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-        return json({ rooms: rooms.slice(0, 40) });
-      } catch (e) {
-        return json({ rooms: [] });
-      }
+      const r = await lobbyStub(env).fetch('https://do/list');
+      return new Response(await r.text(), { headers: { 'Content-Type': 'application/json', ...CORS } });
     }
 
-    // WebSocket upgrade -> forward to the room's Durable Object.
     if (path === '/ws') {
       const code = (url.searchParams.get('room') || '').toUpperCase();
-      if (!/^[A-Z0-9]{3,6}$/.test(code)) return json({ error: 'bad room code' }, 400);
-      if (request.headers.get('Upgrade') !== 'websocket')
-        return json({ error: 'expected websocket' }, 426);
-      const id = env.ROOMS.idFromName(code);
-      const stub = env.ROOMS.get(id);
-      return stub.fetch(request);
+      if (!/^[A-Z2-9]{4}$/.test(code)) return json({ error: 'bad room code' }, 400);
+      return roomStub(env, code).fetch(request);
     }
-
     return json({ error: 'not found' }, 404);
   },
 };
 
-/* ============================================================
-   GameRoom  Durable Object
-   One instance per room code. Holds the live WebSocket sessions,
-   the shared map seed, slot/host assignment, and relays messages.
-   ============================================================ */
+const NET_HZ = 15;            // net ticks per second; each = 2 sim steps of 1/30
+const NET_MS = 1000 / NET_HZ;
+
 export class GameRoom {
   constructor(state, env) {
-    this.state = state;
-    this.env = env;
-    this.sessions = new Map(); // id -> {ws,name,slot,faction,ready,host}
-    this.seed = null;
-    this.code = null;
-    this.max = 2;
-    this.started = false;
-    this.hostId = null;
+    this.state = state; this.env = env;
+    this.mode = null;                    // 'room' | 'lobby'
+    // lobby registry
+    this.listings = new Map();           // code -> {name,region,players,max,ts}
+    // room
+    this.cfg = null;                     // {code,seed,max,name,pub,region}
+    this.players = [];                   // [{ws,name,slot,ready,alive}]
+    this.running = false;
+    this.tick = 0;
+    this.pending = {};                   // slot -> cmds queued for next tick
+    this.hashes = {};                    // tick -> {slot:hash}
+    this.timer = null;
   }
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname.endsWith('/info')) {
-      return json({ code: this.code, started: this.started, seed: this.seed, players: this.lobby() });
-    }
-    if (request.headers.get('Upgrade') !== 'websocket')
-      return new Response('expected websocket', { status: 426 });
 
-    if (this.code == null) this.code = (url.searchParams.get('room') || '').toUpperCase();
-    const qMax = url.searchParams.get('max') | 0;
-    if (qMax >= 2 && qMax <= 4) this.max = qMax;
-    if (this.seed == null) {
-      const qs = url.searchParams.get('seed');
-      this.seed = qs != null ? (qs >>> 0) : (crypto.getRandomValues(new Uint32Array(1))[0] >>> 0);
+    /* ---- lobby registry mode ---- */
+    if (url.pathname === '/list') {
+      this.mode = 'lobby';
+      const now = Date.now(), out = [];
+      for (const [code, r] of this.listings) {
+        if (now - r.ts > 90000) { this.listings.delete(code); continue; }
+        out.push({ code, ...r });
+      }
+      return json({ rooms: out });
     }
-    const name = (url.searchParams.get('name') || 'Player').slice(0, 16);
+    if (url.pathname === '/publish') {
+      this.mode = 'lobby';
+      const b = await request.json();
+      if (b.remove) this.listings.delete(b.code);
+      else this.listings.set(b.code, { name: b.name, region: b.region, players: b.players, max: b.max, ts: Date.now() });
+      return json({ ok: true });
+    }
 
-    const pair = new WebSocketPair();
-    const client = pair[0], server = pair[1];
-    server.accept();
-    this.onOpen(server, name);
-    return new Response(null, { status: 101, webSocket: client });
+    /* ---- room mode ---- */
+    if (url.pathname === '/init') {
+      this.mode = 'room';
+      this.cfg = await request.json();
+      await this.state.storage.put('cfg', this.cfg);
+      return json({ ok: true });
+    }
+    if (!this.cfg) this.cfg = (await this.state.storage.get('cfg')) || null;
+    if (url.searchParams.get('probe')) return json({ cfg: !!this.cfg, running: this.running, players: this.roster().length });
+    if (request.headers.get('Upgrade') === 'websocket') {
+      if (!this.cfg) return json({ error: 'no such room' }, 404);
+      if (this.running) return json({ error: 'game already started' }, 409);
+      if (this.players.filter(p => p.alive).length >= this.cfg.max) return json({ error: 'room full' }, 409);
+      const pair = new WebSocketPair();
+      this.accept(pair[1]);
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
+    return json({ error: 'bad request' }, 400);
   }
 
-  freeSlot() {
-    const used = new Set([...this.sessions.values()].map(s => s.slot));
-    for (let i = 0; i < this.max; i++) if (!used.has(i)) return i;
-    return -1;
-  }
-
-  onOpen(ws, name) {
-    if (this.started || this.sessions.size >= this.max) {
-      try { ws.send(JSON.stringify({ type: 'error', reason: this.started ? 'in_progress' : 'full' })); ws.close(1000, 'unavailable'); } catch (e) {}
-      return;
-    }
-    const slot = this.freeSlot();
-    const id = crypto.randomUUID();
-    const isHost = this.sessions.size === 0;
-    const sess = { ws, name, slot, faction: slot, ready: false, host: isHost, id };
-    this.sessions.set(id, sess);
-    if (isHost) this.hostId = id;
-
+  accept(ws) {
+    ws.accept();
+    const slot = this.players.length;
+    const p = { ws, name: 'Cmdr', slot, ready: false, alive: true };
+    this.players.push(p);
+    ws.addEventListener('message', ev => { try { this.onMsg(p, JSON.parse(ev.data)); } catch (e) {} });
+    const bye = () => this.onLeave(p);
+    ws.addEventListener('close', bye); ws.addEventListener('error', bye);
     ws.send(JSON.stringify({
-      type: 'welcome', you: slot, host: this.hostSlot(), seed: this.seed,
-      code: this.code, max: this.max, players: this.lobby(),
+      t: 'joined', slot, seed: this.cfg.seed, max: this.cfg.max,
+      region: this.cfg.region, code: this.cfg.code, players: this.roster(),
     }));
-    this.broadcast({ type: 'lobby', players: this.lobby(), host: this.hostSlot() }, id);
-    this.touchLobby();
-
-    ws.addEventListener('message', ev => this.onMessage(id, ev.data));
-    ws.addEventListener('close', () => this.onClose(id));
-    ws.addEventListener('error', () => this.onClose(id));
+    this.roomcast({ t: 'players', players: this.roster() }, p);
+    this.publish();
   }
 
-  onMessage(id, raw) {
-    const s = this.sessions.get(id);
-    if (!s) return;
-    let m; try { m = JSON.parse(raw); } catch (e) { return; }
-    switch (m.type) {
-      case 'ready':
-        s.ready = !!m.ready;
-        if (typeof m.faction === 'number') s.faction = m.faction;
-        if (typeof m.name === 'string') s.name = m.name.slice(0, 16);
-        this.broadcast({ type: 'lobby', players: this.lobby(), host: this.hostSlot() });
-        break;
-      case 'start':
-        if (!s.host || this.started) break;
-        this.started = true;
-        this.broadcast({ type: 'start', seed: this.seed, host: this.hostSlot(), players: this.lobby() });
-        this.touchLobby();
-        break;
-      case 'order': // client -> host
-        if (s.host) break; // host applies its own orders locally
-        { const h = this.sessions.get(this.hostId);
-          if (h) try { h.ws.send(JSON.stringify({ type: 'order', from: s.slot, order: m.order })); } catch (e) {} }
-        break;
-      case 'snap': // host -> everyone else
-        if (!s.host) break;
-        this.broadcast({ type: 'snap', t: m.t, ents: m.ents, meta: m.meta }, id);
-        break;
-      case 'ev': // host -> everyone else (spawn/die/fx/credits)
-        if (!s.host) break;
-        this.broadcast({ type: 'ev', ev: m.ev }, id);
-        break;
-      case 'chat':
-        this.broadcast({ type: 'chat', from: s.slot, name: s.name, text: String(m.text || '').slice(0, 200) });
-        break;
-      case 'ping':
-        try { s.ws.send(JSON.stringify({ type: 'pong', t: m.t })); } catch (e) {}
-        break;
-    }
+  roster() { return this.players.filter(p => p.alive).map(p => ({ slot: p.slot, name: p.name, ready: p.ready })); }
+  roomcast(obj, skip) {
+    const s = JSON.stringify(obj);
+    for (const p of this.players) if (p.alive && p !== skip) { try { p.ws.send(s); } catch (e) {} }
   }
-
-  onClose(id) {
-    const s = this.sessions.get(id);
-    if (!s) return;
-    this.sessions.delete(id);
-    if (s.host) {
-      if (this.started) {
-        this.broadcast({ type: 'host_left' });
-      } else {
-        // promote next player to host in the lobby
-        const next = this.sessions.values().next().value;
-        if (next) { next.host = true; this.hostId = next.id; }
-        this.broadcast({ type: 'lobby', players: this.lobby(), host: this.hostSlot() });
-      }
-    } else {
-      this.broadcast({ type: 'leave', slot: s.slot });
-      this.broadcast({ type: 'lobby', players: this.lobby(), host: this.hostSlot() });
-    }
-    this.touchLobby();
-  }
-
-  hostSlot() {
-    const h = this.sessions.get(this.hostId);
-    return h ? h.slot : -1;
-  }
-  lobby() {
-    return [...this.sessions.values()].map(s => ({ slot: s.slot, name: s.name, faction: s.faction, ready: s.ready, host: s.host }));
-  }
-  broadcast(obj, exceptId) {
-    const str = JSON.stringify(obj);
-    for (const [id, s] of this.sessions) {
-      if (id === exceptId) continue;
-      try { s.ws.send(str); } catch (e) {}
-    }
-  }
-  async touchLobby() {
-    if (!this.env.LOBBY || !this.code) return;
+  async publish(remove) {
+    if (!this.cfg || !this.cfg.pub) return;
     try {
-      if (this.sessions.size === 0) {
-        await this.env.LOBBY.delete('room:' + this.code);
-      } else {
-        await this.env.LOBBY.put('room:' + this.code, JSON.stringify({
-          code: this.code, players: this.sessions.size, max: this.max,
-          started: this.started, ts: Date.now(),
-        }), { expirationTtl: 3600 });
-      }
+      await lobbyStub(this.env).fetch('https://do/publish', {
+        method: 'POST',
+        body: JSON.stringify(remove ? { code: this.cfg.code, remove: true } : {
+          code: this.cfg.code, name: this.cfg.name, region: this.cfg.region,
+          players: this.roster().length, max: this.cfg.max,
+        }),
+      });
     } catch (e) {}
+  }
+
+  onMsg(p, m) {
+    switch (m.t) {
+      case 'hello':
+        p.name = String(m.name || 'Cmdr').slice(0, 16);
+        this.roomcast({ t: 'players', players: this.roster() });
+        this.publish(); break;
+      case 'ready':
+        p.ready = !!m.v;
+        this.roomcast({ t: 'players', players: this.roster() });
+        this.maybeStart(); break;
+      case 'cmd':
+        if (this.running && Array.isArray(m.c))
+          (this.pending[p.slot] = this.pending[p.slot] || []).push(...m.c.slice(0, 32));
+        break;
+      case 'hash': {
+        const h = (this.hashes[m.tick] = this.hashes[m.tick] || {});
+        h[p.slot] = m.h;
+        const vals = Object.values(h);
+        if (vals.length === this.players.filter(q => q.alive).length && new Set(vals).size > 1)
+          this.roomcast({ t: 'desync', tick: m.tick });
+        for (const k of Object.keys(this.hashes)) if (+k < m.tick - 40) delete this.hashes[k];
+        break;
+      }
+      case 'ping': try { p.ws.send(JSON.stringify({ t: 'pong', ts: m.ts })); } catch (e) {} break;
+      case 'chat': this.roomcast({ t: 'chat', slot: p.slot, m: String(m.m || '').slice(0, 140) }); break;
+    }
+  }
+
+  maybeStart() {
+    const live = this.players.filter(p => p.alive);
+    if (this.running || live.length < 2 || !live.every(p => p.ready)) return;
+    this.running = true; this.tick = 0; this.pending = {};
+    this.publish(true);
+    this.roomcast({ t: 'begin', seed: this.cfg.seed, players: this.roster() });
+    this.timer = setInterval(() => this.step(), NET_MS);
+  }
+
+  step() {
+    const cmds = this.pending; this.pending = {};
+    this.roomcast({ t: 'tick', n: this.tick, cmds });
+    this.tick++;
+  }
+
+  onLeave(p) {
+    if (!p.alive) return;
+    p.alive = false;
+    this.roomcast({ t: 'left', slot: p.slot });
+    const live = this.players.filter(q => q.alive).length;
+    if (live === 0) {
+      if (this.timer) { clearInterval(this.timer); this.timer = null; }
+      this.running = false; this.players = []; this.publish(true);
+    } else if (!this.running) this.publish();
   }
 }
