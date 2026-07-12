@@ -209,6 +209,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   <button class="cbtn" id="cAttack"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L19 5M4.6 14.6L9.4 19.4M17 17L5 5M14.6 19.4L19.4 14.6"/></svg><small>attack</small></button>
   <button class="cbtn" id="cPatrol"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M21.5 8.5L20 12l-3.4-1.4"/></svg><small>patrol</small></button>
   <button class="cbtn" id="cGuard"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.8-7 10-4-2.2-7-5.5-7-10V6z"/></svg><small>guard</small></button>
+  <button class="cbtn" id="cProtect"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.8-7 10-4-2.2-7-5.5-7-10V6z"/><circle cx="12" cy="11" r="2.2"/></svg><small>protect</small></button>
   <button class="cbtn" id="cScout"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="5"/><path d="M13.8 13.8L20 20M8 10h4M10 8v4"/></svg><small>scout</small></button>
   <button class="cbtn" id="cBoard"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="7" rx="1.5"/><circle cx="8.5" cy="18" r="1.6"/><circle cx="15.5" cy="18" r="1.6"/><path d="M12 2v6M9.4 5.4L12 8l2.6-2.6"/></svg><small>board</small></button>
   <button class="cbtn" id="cUnload"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l6 7.5H6z"/><path d="M6 17.5h12"/></svg><small>unload</small></button>
@@ -4488,7 +4489,7 @@ function spawnOreField(cx,cz,count,rich){
     mesh.position.set(x,groundH(x,z)+0.5,z);
     mesh.rotation.y=rand(0,6.28); mesh.castShadow=true; mesh.visible=false;
     scene.add(mesh);
-    G.ore.push({x,z,amount:rand(2600,3800)*rich,mesh,max:3800*rich});
+    G.ore.push({x,z,amount:rand(3400,4900)*rich,mesh,max:4900*rich});
   }
 }
 
@@ -4827,18 +4828,19 @@ mmCanvas.addEventListener('pointerdown',e=>{e.preventDefault();mmNav(e);
 /* ============================ COMMAND BAR ============================ */
 const cmdbar=document.getElementById('cmdbar');
 const CB={};
-for(const id of['cAttack','cPatrol','cGuard','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel'])
+for(const id of['cAttack','cPatrol','cGuard','cProtect','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel'])
   CB[id]=document.getElementById(id);
 function clearPending(){G.pendingCmd=null;for(const k in CB)CB[k].classList.remove('arm');}
 function armCmd(cmd,btn){
   if(G.pendingCmd===cmd){clearPending();return;}
   clearPending();G.pendingCmd=cmd;btn.classList.add('arm');
   announce({attack:'Select attack target',patrol:'Select patrol point',guard:'Select guard position',
-            board:'Select an IFV',rally:'Set rally point'}[cmd]);
+            protect:'Select a friendly unit to protect',board:'Select an IFV',rally:'Set rally point'}[cmd]);
 }
 CB.cAttack.onclick=()=>armCmd('attack',CB.cAttack);
 CB.cPatrol.onclick=()=>armCmd('patrol',CB.cPatrol);
 CB.cGuard .onclick=()=>armCmd('guard',CB.cGuard);
+CB.cProtect.onclick=()=>armCmd('protect',CB.cProtect);
 CB.cBoard .onclick=()=>armCmd('board',CB.cBoard);
 CB.cRally .onclick=()=>armCmd('rally',CB.cRally);
 CB.cScout .onclick=()=>{orderScout();clearPending();};
@@ -4860,6 +4862,10 @@ function execPending(cx,cy,w){
     if(foe)orderAttack(foe);else if(w)orderAMove(w);
   }else if(cmd==='patrol'&&w)orderPatrol(w);
   else if(cmd==='guard'&&w)orderGuard(w);
+  else if(cmd==='protect'){
+    const pt=entityAt(cx,cy,0);
+    if(pt&&pt.cat==='u')orderProtect(pt);else{sfx.deny();announce('Select a friendly unit');}
+  }
   else if(cmd==='board'){
     const apc=entityAt(cx,cy,0);
     if(apc&&apc.type==='apc')orderBoard(apc);else{sfx.deny();announce('That is not an IFV');}
@@ -4871,6 +4877,7 @@ function rightOrder(cx,cy){
   if(foe&&G.selected.length){orderAttack(foe);return;}
   const own=entityAt(cx,cy,0);
   if(own&&own.type==='apc'&&G.selected.length&&G.selected.every(u=>u.def.armor==='inf')){orderBoard(own);return;}
+  if(own&&own.cat==='u'&&G.selected.length&&G.selected.some(e=>e.cat==='u')&&!G.selected.includes(own)){orderProtect(own);return;}
   const w=groundHit(cx,cy);
   if(w&&G.selected.length)smartOrder(w);
 }
@@ -5503,6 +5510,7 @@ function updateCmdbar(){
   CB.cAttack.classList.toggle('off',!units.length);
   CB.cPatrol.classList.toggle('off',!units.length);
   CB.cGuard.classList.toggle('off',!units.length);
+  CB.cProtect.classList.toggle('off',!units.length);
   CB.cScout.classList.toggle('off',!units.length);
   CB.cStop.classList.toggle('off',!units.length);
   CB.cSquad.classList.toggle('off',!units.length);
@@ -5549,6 +5557,7 @@ function execCmd(team,c){
         case 'at':if(tg&&!tg.dead)_ordAttack(units,tg);break;
         case 'pt':_ordPatrol(units,w);break;
         case 'gd':_ordGuard(units,w);break;
+        case 'es':if(tg&&!tg.dead&&tg.cat==='u')_ordProtect(units,tg);break;
         case 'sc':_ordScout(units);break;
         case 'st':_ordStop(units);break;
         case 'bd':if(tg&&!tg.dead&&tg.team===team)_ordBoard(units,tg);break;
@@ -5569,6 +5578,12 @@ function orderPatrol(w){const ids=selIds();if(!ids.length)return;announce('Patro
 function orderGuard(w){const ids=selIds();if(!ids.length)return;announce('Holding position');sfx.move();netCmd({k:'o',op:'gd',ids,x:w.x,z:w.z});}
 function orderScout(){const ids=selIds();if(!ids.length)return;announce('Scouting the dark');sfx.move();netCmd({k:'o',op:'sc',ids});}
 function orderStop(){const ids=selIds();if(!ids.length)return;sfx.click();netCmd({k:'o',op:'st',ids});}
+function orderProtect(t){
+  const ids=selIds().filter(id=>id!==t.id);
+  if(!ids.length)return;
+  announce('Escorting '+t.def.name);sfx.move();
+  netCmd({k:'o',op:'es',ids,tg:t.id});
+}
 function orderBoard(apc){const ids=selIds();if(!ids.length)return;announce('Boarding APC');sfx.move();netCmd({k:'o',op:'bd',ids,tg:apc.id});}
 function unloadAPCs(){
   const ids=selUnits().filter(u=>u.team===G.myTeam&&u.def.cap&&u.cargoUnits&&u.cargoUnits.length).map(u=>u.id);
@@ -5578,14 +5593,14 @@ function unloadAPCs(){
 /* ---- executors (pure deterministic sim mutations) ---- */
 function _ordSmart(units,w){
   if(!units.length)return;
-  let node=null,bd=49;
+  let node=null,bd=24*24;
   for(const o of G.ore){if(o.amount>0){const dd=d2(w.x,w.z,o.x,o.z);if(dd<bd){bd=dd;node=o;}}}
   const off=offsets(units.length);
   units.forEach((u,i)=>{
     resetOrder(u);
     if(u.type==='harvester'){
-      if(node){u.oreTgt=node;u.order={mode:'idle'};u.state='toOre';u.manual=false;}
-      else{u.order={mode:'move'};u.dest={x:w.x+off[i].x,z:w.z+off[i].z};u.manual=true;}
+      if(node){u.oreTgt=node;u.orePref={x:w.x,z:w.z};u.order={mode:'idle'};u.state='toOre';u.manual=false;}
+      else{u.orePref=null;u.order={mode:'move'};u.dest={x:w.x+off[i].x,z:w.z+off[i].z};u.manual=true;}
     }else{
       u.order={mode:'amove'};u.dest={x:w.x+off[i].x,z:w.z+off[i].z};
     }
@@ -5619,6 +5634,14 @@ function _ordGuard(units,w){
     const a={x:w.x+off[i].x,z:w.z+off[i].z};
     u.order={mode:'guard',anchor:a};u.dest={...a};
   });
+}
+function _ordProtect(units,t){
+  for(const u of units){
+    if(u===t)continue;
+    resetOrder(u);
+    if(u.type==='harvester')u.manual=true;
+    u.order={mode:'escort',tgt:t};u.dest=null;
+  }
 }
 function _ordScout(units){
   for(const u of units){
@@ -5963,10 +5986,19 @@ function updateUnit(u,dt){
     }
     animEnt(u,dt);return;
   }
+  /* escort upkeep: ward died or boarded -> hold this ground */
+  if(m==='escort'){
+    const p=u.order.tgt;
+    if(!p||p.dead||p.inside){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};u.dest={...u.order.anchor};}
+  }
   /* target upkeep */
   if(u.target&&(u.target.dead||u.target.inside))u.target=null;
   if(u.target&&m==='guard'&&d2(u.target.pos.x,u.target.pos.z,u.order.anchor.x,u.order.anchor.z)>32*32){
     u.target=null;u.dest={...u.order.anchor};
+  }
+  if(u.target&&u.order.mode==='escort'&&
+     d2(u.target.pos.x,u.target.pos.z,u.order.tgt.pos.x,u.order.tgt.pos.z)>30*30){
+    u.target=null;
   }
   if(u.target&&u.engFrom&&(m==='idle'||m==='amove'||m==='patrol')&&
      d2(u.pos.x,u.pos.z,u.engFrom.x,u.engFrom.z)>34*34){
@@ -5980,6 +6012,7 @@ function updateUnit(u,dt){
     u.scanT=0.25;
     let tgt=null;
     if(m==='guard')tgt=nearestEnemy(u.order.anchor.x,u.order.anchor.z,26,u.team);
+    else if(u.order.mode==='escort')tgt=nearestEnemy(u.order.tgt.pos.x,u.order.tgt.pos.z,24,u.team);
     else tgt=nearestEnemy(u.pos.x,u.pos.z,u.sight,u.team);
     if(tgt){u.target=tgt;if(!u.engFrom)u.engFrom={x:u.pos.x,z:u.pos.z};}
   }
@@ -6001,9 +6034,17 @@ function updateUnit(u,dt){
   }else if(m==='guard'){
     if(!u.dest&&d2(u.pos.x,u.pos.z,u.order.anchor.x,u.order.anchor.z)>9)u.dest={...u.order.anchor};
     if(u.dest)moveUnit(u,dt);
+  }else if(u.order.mode==='escort'){
+    const p=u.order.tgt;
+    const dd=d2(u.pos.x,u.pos.z,p.pos.x,p.pos.z);
+    if(!u.dest&&dd>7*7)u.dest={x:p.pos.x,z:p.pos.z};
+    if(u.dest){
+      u.dest.x=p.pos.x;u.dest.z=p.pos.z;
+      if(dd<5*5)u.dest=null;else moveUnit(u,dt);
+    }
   }else if(m==='move'||m==='amove'){
     if(moveUnit(u,dt)){
-      if(u.team!==0){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};}
+      if(!G.mpGame&&u.team!==0){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};}
       else{u.order={mode:'idle'};u.engFrom=null;if(u.type==='harvester'){u.manual=false;u.state='idle';}}
     }
   }else{
@@ -6014,13 +6055,15 @@ function updateUnit(u,dt){
 function harvesterAI(u,dt){
   if(!u.state)u.state='idle';
   if(u.state==='idle'){
+    const ox=u.orePref?u.orePref.x:u.pos.x, oz=u.orePref?u.orePref.z:u.pos.z;
     let best=null,bd=1e12;
     for(const o of G.ore){
       if(o.amount<=0)continue;
       if(!G.mpGame&&u.team===G.myTeam&&!isExplored(o.x,o.z))continue;
-      const dd=d2(u.pos.x,u.pos.z,o.x,o.z);
+      const dd=d2(ox,oz,o.x,o.z);
       if(dd<bd){bd=dd;best=o;}
     }
+    if(u.orePref&&(!best||bd>44*44)){u.orePref=null;return;}
     if(best){u.oreTgt=best;u.state='toOre';}
     return;
   }
@@ -6320,7 +6363,7 @@ function prodTickTeams(dt,froms){
         const prod=G.ents.find(e=>!e.dead&&e.team===T&&e.type===from);
         if(prod){
           let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
-          if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+5, shoreX(sz)+3.5+rand(0,3));}
+          if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+6, shoreX(sz)+8+rand(0,4));}
           const u=spawnUnit(item.type,sx,sz,T);
           const tgt=prod.rally||{x:prod.pos.x+rand(-6,6),z:prod.pos.z+prod.faceZ*9};
           u.order={mode:'amove'};u.dest={x:tgt.x+rand(-2,2),z:tgt.z+rand(-2,2)};
@@ -6478,8 +6521,8 @@ function announce(txt){
 /* ============================ WORLD SETUP ============================ */
 function buildWorld(){
   /* mainland ore */
-  spawnOreField(-255,285,11,1);spawnOreField(-345,225,11,1);spawnOreField(-282,360,10,1);
-  spawnOreField(240,-360,11,1);spawnOreField(345,-330,11,1);spawnOreField(390,-435,10,1);
+  spawnOreField(-255,285,12,1.2);spawnOreField(-345,225,12,1.2);spawnOreField(-282,360,11,1.2);
+  spawnOreField(240,-360,12,1.2);spawnOreField(345,-330,12,1.2);spawnOreField(390,-435,11,1.2);
   spawnOreField(225,300,11,1);spawnOreField(345,255,10,1);spawnOreField(375,375,10,1);
   spawnOreField(-240,-300,11,1);spawnOreField(-390,-255,10,1);spawnOreField(-300,-420,10,1);
   spawnOreField(0,30,14,1.6);spawnOreField(-45,-30,14,1.6);spawnOreField(45,-15,12,1.4);
@@ -6815,6 +6858,10 @@ function execPendingV5(cx,cy,w){
     if(foe)orderAttack(foe);else if(w)orderAMove(w);
   }else if(cmd==='patrol'&&w)orderPatrol(w);
   else if(cmd==='guard'&&w)orderGuard(w);
+  else if(cmd==='protect'){
+    const pt=entityAt(cx,cy,0);
+    if(pt&&pt.cat==='u')orderProtect(pt);else{sfx.deny();announce('Select a friendly unit');}
+  }
   else if(cmd==='board'){
     const t=entityAt(cx,cy,0);
     if(t&&t.def.cap&&t.cargoUnits&&t.cargoUnits.length<t.def.cap)orderBoard(t);
@@ -7032,14 +7079,16 @@ buildWorld=function(){
     u.dest={x:-272+i*3,z:264+i*3};u.order={mode:'amove'};
   });
   /* naval escort waiting off the coast */
-  const boat=spawnUnit('gunboat',468,300,0);boat.dest={x:462,z:292};boat.order={mode:'guard',anchor:{x:462,z:292}};
-  const craft=spawnUnit('landingcraft',464,314,0);craft.dest={x:460,z:306};craft.order={mode:'guard',anchor:{x:460,z:306}};
+  const bgx=shoreX(252)+24, cgx=shoreX(238)+24;
+  const boat=spawnUnit('gunboat',bgx,252,0);boat.order={mode:'guard',anchor:{x:bgx,z:252}};
+  const craft=spawnUnit('landingcraft',cgx,238,0);craft.order={mode:'guard',anchor:{x:cgx,z:238}};
   /* enemy drone tech */
   spawnBuilding('dronebay',329,-441,1);
   spawnBuilding('robotics',336,-429,1);
   /* enemy sea patrol */
-  const eb=spawnUnit('gunboat',466,78,1);eb.order={mode:'guard',anchor:{x:466,z:78}};
-  const ec=spawnUnit('corvette',474,-174,1);ec.order={mode:'guard',anchor:{x:474,z:-174}};
+  const ebx=shoreX(10)+26, ecx=shoreX(-174)+30;
+  const eb=spawnUnit('gunboat',ebx,10,1);eb.order={mode:'guard',anchor:{x:ebx,z:10}};
+  const ec=spawnUnit('corvette',ecx,-174,1);ec.order={mode:'guard',anchor:{x:ecx,z:-174}};
   /* forward camps */
   const camps=[{x:165,z:156,t:2},{x:-174,z:-210,t:3},{x:312,z:54,t:1}];
   camps.forEach((c,idx)=>{
