@@ -4059,6 +4059,16 @@ const MAPS = [
          [470,-300,10,1.9],[475,0,12,2],[478,300,10,1.9],[560,-60,8,1.8],[565,220,8,1.8]] }
 ];
 const MAP_BY_ID = {}; MAPS.forEach((m,i)=>{m.idx=i;MAP_BY_ID[m.id]=m;});
+/* Every 'team' index in the map data is really a START SLOT (team i currently sits in
+   slot i). ROT rotates which team occupies which slot, so bases, colours, outposts and
+   camps all move together. In multiplayer ROT comes from the room seed so both clients
+   agree; in single player it is rolled fresh each match. */
+let ROT = 0;
+const slotOf  = team => (team + ROT) & 3;          // which start slot this team gets
+const teamOf  = slot => (slot - ROT + 4) & 3;      // who owns the stuff listed for that slot
+const baseOf  = team => MAP.bases[slotOf(team)];
+const colIdx  = team => slotOf(team);              // colour follows the slot
+function setRot(r){ ROT = ((r|0)%4+4)%4; }
 let MAP = MAPS[0];
 (function(){
   var want=null;
@@ -4079,6 +4089,7 @@ let WSX = 0, WSZ = 0;              // world seed offsets (per map, or server-dri
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
 const TEAM_COL = [0x4169e1, 0xff5148, 0xe8e6ee, 0xb64df0];
+const COL_NAME = ['BLUE','RED','BONE','VIOLET'];
 
 const MULT = {
   bullet:{inf:1.00, veh:0.25, bld:0.18},
@@ -4135,9 +4146,9 @@ const G = {
   queues:[{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]}],
   myTeam:0, mpGame:false,
   placing:null, pendingCmd:null,
-  ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:MAP.bases[1][0],z:MAP.bases[1][1]}},
-       {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:MAP.bases[2][0],z:MAP.bases[2][1]}},
-       {prodTimer:16, waveTimer:300, wave:0, comp:4, defendCd:0, provoked:-99, home:{x:MAP.bases[3][0],z:MAP.bases[3][1]}}],
+  ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:0,z:0}},
+       {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:0,z:0}},
+       {prodTimer:16, waveTimer:300, wave:0, comp:4, defendCd:0, provoked:-99, home:{x:0,z:0}}],
   muted:false, lowPowerMsg:0, lastSight:-99
 };
 G.ai=G.ais[0];
@@ -5241,7 +5252,7 @@ function dTex(key,w,h,fn){
   const t=new THREE.CanvasTexture(c);t.anisotropy=2;
   return TEXC[key]=t;
 }
-const teamHex=t=>'#'+TEAM_COL[t].toString(16).padStart(6,'0');
+const teamHex=t=>'#'+TEAM_COL[colIdx(t)].toString(16).padStart(6,'0');
 function seams(x,w,h,step,a){
   x.strokeStyle='rgba(0,0,0,'+a+')';x.lineWidth=2;
   for(let i=step;i<w;i+=step){x.beginPath();x.moveTo(i,0);x.lineTo(i,h);x.stroke();}
@@ -5320,9 +5331,9 @@ const siloTex=()=>dTex('silo',64,64,(x,w,h)=>{
 /* cached materials */
 const MAT={},PM={};
 function teamMat(team,shade){
-  const key=team+'_'+shade;
+  const key=colIdx(team)+'_'+shade;               // cache by colour, not by team
   if(!MAT[key]){
-    const c=new THREE.Color(TEAM_COL[team]).multiplyScalar(shade);
+    const c=new THREE.Color(TEAM_COL[colIdx(team)]).multiplyScalar(shade);
     MAT[key]=new THREE.MeshLambertMaterial({color:c});
   }
   return MAT[key];
@@ -6777,9 +6788,11 @@ function buildWorld(){
   for(const[x,z,c,r]of MAP.ore)spawnOreField(x,z,c,r);
   if(!G.mpGame){
   /* player */
-  spawnBuilding('conyard',MAP.bases[0][0],MAP.bases[0][1],0);
-  spawnUnit('rifleman',MAP.bases[0][0]+6,MAP.bases[0][1]+6,0);
-  spawnUnit('rifleman',MAP.bases[0][0]-6,MAP.bases[0][1]+6,0);
+  for(let t=1;t<=3;t++){const b=baseOf(t);G.ais[t-1].home={x:b[0],z:b[1]};}
+  const PB=baseOf(0);
+  spawnBuilding('conyard',PB[0],PB[1],0);
+  spawnUnit('rifleman',PB[0]+6,PB[1]+6,0);
+  spawnUnit('rifleman',PB[0]-6,PB[1]+6,0);
   /* enemy faction bases */
   function enemyBase(team,bx,bz){
     spawnBuilding('conyard',bx,bz,team);
@@ -6795,7 +6808,7 @@ function buildWorld(){
       u.order={mode:'guard',anchor:{x:bx+ox,z:bz+oz}};
     }
   }
-  for(let t=1;t<=3;t++)enemyBase(t,MAP.bases[t][0],MAP.bases[t][1]);
+  for(let t=1;t<=3;t++){const b=baseOf(t);enemyBase(t,b[0],b[1]);}
   /* forward outposts */
   function outpost(team,ox,oz){
     spawnBuilding('turret',ox,oz,team);
@@ -6806,8 +6819,8 @@ function buildWorld(){
       u.order={mode:'guard',anchor:{x:ox+dx,z:oz+dz}};
     }
   }
-  for(const[t,ox,oz]of MAP.outposts)outpost(t,ox,oz);
-  cam.x=MAP.bases[0][0];cam.z=MAP.bases[0][1];
+  for(const[s,ox,oz]of MAP.outposts)outpost(teamOf(s),ox,oz);
+  cam.x=PB[0];cam.z=PB[1];
   }
   initSidebar();refreshSquadUI();
   updateFog();drawMinimap();
@@ -6968,6 +6981,37 @@ UDEF.fighter  ={name:'Fighter Talon',   cost:1400, time:14, hp:220, speed:30.0, 
 INF_ORDER.push('engineer','mgteam');
 VEH_ORDER.push('gunship','bomber','fighter');
 G.queues.mechbay=[];G.queues.drydock=[];G.queues.airhangar=[];G.queues.dronetech=[];G.queues.bunker=[];
+
+/* Deterministic search for OPEN water near a latitude. Bases rotate, so a fleet can
+   end up wedged against an island; score candidates on the sea room around them and
+   take the roomiest, not merely the first wet tile. */
+function seaClearance(x,z){
+  let open=0,tot=0;
+  for(let a=0;a<8;a++){
+    const th=a*Math.PI/4;
+    for(const R of [10,20,30]){
+      tot++;
+      if(isWater(x+Math.cos(th)*R, z+Math.sin(th)*R))open++;
+    }
+  }
+  return open/tot;
+}
+function seaSpawn(z0){
+  let best=null,bs=-1;
+  for(let k=0;k<44;k++){
+    for(const s of (k===0?[0]:[1,-1])){
+      const z=clamp(z0+s*k*14,-HALF+50,HALF-50);
+      for(const off of [26,38,52,68]){
+        const x=shoreX(z)+off;
+        if(x>=HALF-12||!isWater(x,z))continue;
+        const c=seaClearance(x,z) - k*0.012;      // prefer roomy water, but stay near home
+        if(c>bs){bs=c;best={x,z};}
+        if(bs>=1)return best;                     // fully open: done
+      }
+    }
+  }
+  return best;
+}
 
 /* ---------- repair, garrison, deploy: sim ---------- */
 const REPAIR_R=14;                     // how close a unit must sit to a depot
@@ -7764,8 +7808,11 @@ buildWorld=function(){
   if(pcy){pcy.dead=true;scene.remove(pcy.mesh);G.ents=G.ents.filter(e=>e!==pcy);}
   addTerrainDressing();
   if(G.mpGame){mpSymmetricStart();return;}
-  /* convoy */
-  const CV=MAP.convoy, sgn=CV.z>=0?1:-1;
+  /* convoy: rolls in from the player's own corner, whichever that is this match */
+  const PB2=baseOf(0);
+  const cvLen=Math.hypot(PB2[0],PB2[1])||1;
+  const CV={x:PB2[0]-PB2[0]/cvLen*44, z:PB2[1]-PB2[1]/cvLen*44};
+  const sgn=CV.z>=0?1:-1;
   const hq=spawnUnit('mobilehq',CV.x,CV.z,0);
   const e1=spawnUnit('apc',CV.x-6,CV.z+6,0);
   const e2=spawnUnit('rocketeer',CV.x-8,CV.z-6,0);
@@ -7774,26 +7821,26 @@ buildWorld=function(){
     u.pos.x=CV.x-12+i*4;u.pos.z=CV.z-2-i*6*sgn;u.pos.y=groundH(u.pos.x,u.pos.z);
     u.dest={x:CV.x+14+i*3,z:CV.z-18*sgn+i*3*sgn};u.order={mode:'amove'};
   });
-  /* naval escort waiting off the coast (land maps start with no fleet) */
+  /* naval escort waiting off the coast (land maps start with no fleet).
+     Bases rotate, so hunt for genuine open water near the owner's latitude rather
+     than trusting a hand-picked coordinate that might now sit on an island. */
   if(MAP.navy){
-    const pz1=MAP.navy.p[0], pz2=MAP.navy.p[1];
-    const bgx=shoreX(pz1)+24, cgx=shoreX(pz2)+24;
-    const boat=spawnUnit('gunboat',bgx,pz1,0);boat.order={mode:'guard',anchor:{x:bgx,z:pz1}};
-    const craft=spawnUnit('landingcraft',cgx,pz2,0);craft.order={mode:'guard',anchor:{x:cgx,z:pz2}};
+    const p1=seaSpawn(baseOf(0)[1]*0.8), p2=seaSpawn(baseOf(0)[1]*0.8-14);
+    if(p1){const b=spawnUnit('gunboat',p1.x,p1.z,0);b.order={mode:'guard',anchor:{x:p1.x,z:p1.z}};}
+    if(p2){const c=spawnUnit('landingcraft',p2.x,p2.z,0);c.order={mode:'guard',anchor:{x:p2.x,z:p2.z}};}
   }
   /* enemy drone tech */
-  const B1=MAP.bases[1];
+  const B1=baseOf(1);
   spawnBuilding('dronebay',B1[0]+14,B1[1]-21,1);
   spawnBuilding('robotics',B1[0]+21,B1[1]-9,1);
   /* enemy sea patrol */
   if(MAP.navy){
-    const ez1=MAP.navy.e[0], ez2=MAP.navy.e[1];
-    const ebx=shoreX(ez1)+26, ecx=shoreX(ez2)+30;
-    const eb=spawnUnit('gunboat',ebx,ez1,1);eb.order={mode:'guard',anchor:{x:ebx,z:ez1}};
-    const ec=spawnUnit('corvette',ecx,ez2,1);ec.order={mode:'guard',anchor:{x:ecx,z:ez2}};
+    const e1=seaSpawn(baseOf(1)[1]*0.7), e2=seaSpawn(baseOf(1)[1]*0.7+30);
+    if(e1){const b=spawnUnit('gunboat',e1.x,e1.z,1);b.order={mode:'guard',anchor:{x:e1.x,z:e1.z}};}
+    if(e2){const c=spawnUnit('corvette',e2.x,e2.z,1);c.order={mode:'guard',anchor:{x:e2.x,z:e2.z}};}
   }
-  /* forward camps */
-  const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:c[2]}));
+  /* forward camps (listed by slot, so they follow whoever holds that corner) */
+  const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:teamOf(c[2])}));
   camps.forEach((c,idx)=>{
     spawnBuilding('turret',c.x,c.z,c.t);
     if(idx===1)spawnBuilding('dronebay',c.x+8,c.z+7,c.t);
@@ -7803,13 +7850,13 @@ buildWorld=function(){
   });
   ['dogbot','droneugv'].forEach(t=>{if(!AI_COMP.includes(t))AI_COMP.push(t);});
   G.credits[0]=Math.max(G.credits[0],9500);
-  cam.x=MAP.cam.x;cam.z=MAP.cam.z;
+  cam.x=CV.x;cam.z=CV.z;
   setSelection([hq]);
   announce('Convoy inbound: reach open ground and press DEP to deploy the Mobile HQ');
 };
 
 function mpSymmetricStart(){
-  const bases=[{x:MAP.bases[0][0],z:MAP.bases[0][1]},{x:MAP.bases[1][0],z:MAP.bases[1][1]}];
+  const bases=[{x:baseOf(0)[0],z:baseOf(0)[1]},{x:baseOf(1)[0],z:baseOf(1)[1]}];
   for(let T=0;T<2;T++){
     const b=bases[T], f=T===0?-1:1;
     spawnBuilding('conyard',b.x,b.z,T);
@@ -8133,10 +8180,12 @@ const NET=(function(){
     if(panel)panel.style.display='none';
     G.mpGame=true;
     G.myTeam=N.slot;
-    seedRng(m.seed||N.seed);
+    const sd=(m.seed||N.seed)>>>0;
+    seedRng(sd);
+    setRot((sd>>>3)&3);            // same seed, same corners and colours on both clients
     N.on=true;N.tick=-1;N.buf=[];
     startOrResume();
-    announce('Match started: you are '+(G.myTeam===0?'CYAN (south-west)':'CYAN (north-east)'));
+    announce('Match started: you are '+COL_NAME[colIdx(G.myTeam)]+' on '+MAP.name);
   }
   /* ---------- lockstep pump: consume stamped ticks ---------- */
   function pump(){
@@ -8241,7 +8290,11 @@ let built=false;
 function startOrResume(ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
   try{ ensureAudio(); }catch(e){ console.warn('Audio init failed', e); }
-  if(!built){ built=true; buildWorld(); }
+  if(!built){
+    if(!G.mpGame)setRot(Math.floor(Math.random()*4));   // solo: new corner every match
+    built=true; buildWorld();
+    if(!G.mpGame)announce('You are '+COL_NAME[colIdx(0)]+' \u00b7 '+MAP.name);
+  }
   document.getElementById('overlay').style.display='none';
   document.getElementById('startbtn').textContent='Resume';
   G.running=true;
