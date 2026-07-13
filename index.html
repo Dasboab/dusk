@@ -43,6 +43,19 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .tbtn:hover{color:var(--amber);border-color:var(--amber);}
 .tbtn.arm{color:#0d0a16;background:var(--amber);border-color:var(--amber);}
 
+/* map picker */
+#mapsel{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 4px;text-align:left;}
+.mcard{position:relative;border:1px solid rgba(109,79,42,.8);border-radius:3px;padding:9px 10px 8px;
+  background:linear-gradient(180deg,rgba(41,30,60,.9),rgba(22,14,36,.9));cursor:pointer;color:var(--ink);
+  font:inherit;text-align:left;}
+.mcard:hover{border-color:var(--amber);}
+.mcard.on{border-color:var(--amber);box-shadow:inset 0 0 0 1px rgba(240,162,74,.4),0 0 10px rgba(240,162,74,.22);}
+.mcard .mn{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;}
+.mcard .ms{display:block;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+.mcard.on .mn{color:var(--amber);}
+#mapblurb{font-size:12px;color:var(--muted);min-height:34px;margin:2px 0 10px;text-align:left;line-height:1.5;}
+@media (max-width:760px){#mapsel{grid-template-columns:1fr;}}
+
 /* bottom dock */
 #dock{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:28;
   display:flex;align-items:stretch;height:118px;}
@@ -268,6 +281,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
       Drone Tanks, the EW Centre trains Counter UAS teams, the Air Base fields Strike UAVs.<br>
       <b>H</b> home, <b>X</b> stop, <b>Esc</b> cancel.
     </div>
+    <div class="kicker2" style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:#9a8ab0;text-align:left;margin-top:6px;">Theatre</div>
+    <div id="mapsel"></div>
+    <div id="mapblurb"></div>
     <button class="bigbtn" id="startbtn">Deploy</button>
     <button class="bigbtn" id="mpbtn" style="background:linear-gradient(180deg,#2b2440,#1d1830)">Multiplayer</button>
   </div>
@@ -3921,10 +3937,109 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 /* ============================ CONFIG ============================ */
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 const HALF = 630;                  // world spans -630..630 (3x linear, 9x area)
-const SHORE = 444;                 // base eastern shoreline x
-let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multiplayer)
+
+/* ============================ MAPS ============================
+   Terrain, water and shoreline meshes are built once at load, so the
+   active map is resolved here, before any of that runs. Switching map
+   reloads the page. In multiplayer the map index is carried in the low
+   3 bits of the room seed, so both clients always build the same world. */
+const MAPS = [
+  { id:'dawn', name:'Dawn Convoy', sub:'Coastal · 4 factions',
+    blurb:'The original front. A long eastern shore, four island deposits offshore, three rival factions dug into the ridges.',
+    seed:0, shore:{base:444,a1:10,a2:6},
+    isles:[{x:500,z:-380,r:38,s:1.7},{x:530,z:80,r:52,s:4.1},{x:480,z:330,r:30,s:0.6},{x:560,z:-120,r:24,s:2.9}],
+    bases:[[-315,315],[315,-420],[300,330],[-330,-330]],
+    convoy:{x:-286,z:282}, cam:{x:-280,z:278},
+    outposts:[[1,40,-100],[2,90,180],[3,-160,-60]],
+    camps:[[165,156,2],[-174,-210,3],[312,54,1]],
+    navy:{p:[252,238], e:[10,-174]},
+    ore:[[-255,285,12,1.2],[-345,225,12,1.2],[-282,360,11,1.2],
+         [240,-360,12,1.2],[345,-330,12,1.2],[390,-435,11,1.2],
+         [225,300,11,1],[345,255,10,1],[375,375,10,1],
+         [-240,-300,11,1],[-390,-255,10,1],[-300,-420,10,1],
+         [0,30,14,1.6],[-45,-30,14,1.6],[45,-15,12,1.4],
+         [-150,150,10,1.1],[150,-150,10,1.1],[-120,-90,10,1],[120,120,10,1],
+         [30,210,10,1],[-30,-210,10,1],[180,60,10,1.1],[-180,30,10,1.1],
+         [-60,120,9,1],[60,-120,9,1],[240,-60,9,1],[-240,90,9,1],
+         [90,-270,9,1],[-90,300,9,1],
+         [354,156,12,1.25],[348,246,10,1.1],[312,144,14,1.45],[270,198,10,1.2],[360,282,8,1.2],
+         [-96,264,12,1.1],[102,246,12,1.1],[-288,-60,10,1.15],[282,-6,10,1.25],
+         [500,-380,10,2],[530,80,12,2],[480,330,8,1.8]] },
+
+  { id:'atoll', name:'Shattered Atoll', sub:'Naval · Island riches',
+    blurb:'The sea comes halfway in. Most of the auren sits offshore, so the fleet that owns the water owns the war. Build the Naval Yard early.',
+    seed:1471, shore:{base:300,a1:22,a2:13},
+    isles:[{x:380,z:-330,r:46,s:0.4},{x:430,z:-90,r:58,s:2.2},{x:360,z:150,r:50,s:3.6},
+           {x:480,z:360,r:44,s:1.1},{x:545,z:-230,r:34,s:5.0},{x:520,z:60,r:30,s:2.7},
+           {x:300,z:-480,r:36,s:4.4},{x:415,z:470,r:38,s:0.9}],
+    bases:[[-360,330],[-330,-390],[210,390],[150,-450]],
+    convoy:{x:-330,z:300}, cam:{x:-322,z:296},
+    outposts:[[1,-60,-160],[2,10,230],[3,-230,-90]],
+    camps:[[95,205,2],[-150,-250,3],[130,-260,1]],
+    navy:{p:[300,285], e:[-40,-200]},
+    ore:[[-300,270,11,1.1],[-390,255,10,1.1],[-270,390,10,1.1],
+         [-270,-330,11,1.1],[-390,-315,10,1.1],[-225,-435,10,1.1],
+         [165,345,10,1],[255,435,9,1],[105,-405,10,1],[195,-495,9,1],
+         [-30,30,12,1.3],[45,-60,11,1.3],[-90,-15,10,1.2],
+         [-165,165,9,1],[135,-165,9,1],[-135,-135,9,1],[150,135,9,1],
+         [0,255,9,1],[-45,-255,9,1],[-210,45,9,1],[210,-30,9,1],
+         [380,-330,14,2.2],[430,-90,16,2.4],[360,150,14,2.2],[480,360,12,2.1],
+         [545,-230,10,2],[520,60,10,2],[300,-480,10,1.9],[415,470,10,1.9]] },
+
+  { id:'ridge', name:'Iron Ridge', sub:'Landlocked · Contested centre',
+    blurb:'Barely a coast and not an island in sight. Every seam of auren runs through the middle of the map, so the centre is a meat grinder from minute one.',
+    seed:8803, shore:{base:596,a1:5,a2:3},
+    isles:[],
+    bases:[[-390,390],[390,-450],[400,390],[-400,-400]],
+    convoy:{x:-360,z:355}, cam:{x:-354,z:350},
+    outposts:[[1,120,-60],[2,140,150],[3,-150,-120]],
+    camps:[[60,110,2],[-110,-140,3],[190,-30,1]],
+    navy:{p:[240,225], e:[20,-160]},
+    ore:[[-15,15,16,1.8],[45,-45,15,1.7],[-60,60,15,1.7],[15,90,14,1.6],[-90,-30,14,1.6],
+         [105,15,13,1.5],[-120,105,12,1.4],[120,-105,12,1.4],[0,-135,12,1.4],
+         [180,60,11,1.2],[-180,-60,11,1.2],[75,180,11,1.2],[-75,-180,11,1.2],
+         [-255,270,11,1],[-330,225,10,1],[270,-330,11,1],[330,-270,10,1],
+         [285,285,10,1],[-285,-285,10,1],[-210,150,9,1],[210,-150,9,1],
+         [345,120,9,1],[-345,-120,9,1],[150,330,9,1],[-150,-330,9,1]] },
+
+  { id:'strait', name:'Cold Strait', sub:'Mixed · Island chain',
+    blurb:'A ragged chain of islets splits the strait north to south. Land armies fight for the mainland while gunboats trade shots between the rocks.',
+    seed:5279, shore:{base:392,a1:16,a2:9},
+    isles:[{x:452,z:-450,r:26,s:0.8},{x:470,z:-300,r:30,s:2.4},{x:448,z:-150,r:24,s:4.9},
+           {x:475,z:0,r:34,s:1.6},{x:450,z:150,r:26,s:3.3},{x:478,z:300,r:30,s:5.5},
+           {x:455,z:450,r:24,s:2.0},{x:560,z:-60,r:28,s:0.3},{x:565,z:220,r:26,s:4.1}],
+    bases:[[-330,345],[240,-450],[255,345],[-345,-345]],
+    convoy:{x:-300,z:312}, cam:{x:-294,z:306},
+    outposts:[[1,30,-120],[2,80,170],[3,-170,-80]],
+    camps:[[140,170,2],[-160,-190,3],[250,30,1]],
+    navy:{p:[258,244], e:[0,-190]},
+    ore:[[-270,300,12,1.2],[-360,240,11,1.2],[-285,375,10,1.2],
+         [180,-375,12,1.2],[285,-345,11,1.2],[150,-465,10,1.2],
+         [195,315,11,1.1],[300,270,10,1.1],[315,390,10,1.1],
+         [-255,-315,11,1.1],[-390,-270,10,1.1],[-315,-435,10,1.1],
+         [-15,45,13,1.5],[60,-30,13,1.5],[-75,-45,12,1.4],
+         [-165,135,10,1.1],[165,-135,10,1.1],[-105,-120,9,1],[105,135,9,1],
+         [15,225,9,1],[-15,-225,9,1],[195,45,10,1.1],[-195,15,10,1.1],
+         [270,150,10,1.1],[-270,-90,10,1.1],
+         [470,-300,10,1.9],[475,0,12,2],[478,300,10,1.9],[560,-60,8,1.8],[565,220,8,1.8]] }
+];
+const MAP_BY_ID = {}; MAPS.forEach((m,i)=>{m.idx=i;MAP_BY_ID[m.id]=m;});
+let MAP = MAPS[0];
+(function(){
+  var want=null;
+  try{
+    var q=new URLSearchParams(location.search);
+    var qm=q.get('map');
+    if(qm!=null){ want = /^\d+$/.test(qm) ? MAPS[+qm|0] : MAP_BY_ID[qm]; }
+    if(!want){ var ls=localStorage.getItem('bm_map'); if(ls) want=MAP_BY_ID[ls]; }
+  }catch(e){}
+  if(want) MAP=want;
+})();
+const SHORE = MAP.shore.base;      // base eastern shoreline x
+let WSX = 0, WSZ = 0;              // world seed offsets (per map, or server-driven)
 (function(){ var s = (typeof window!=='undefined' && window.__DUSK_SEED!=null) ? (window.__DUSK_SEED>>>0) : 0;
   try{ if(!s){ var q=new URLSearchParams(location.search).get('seed'); if(q!=null){ s=(q>>>0); window.__DUSK_SEED=s; } } }catch(e){}
+  if(!s) s = MAP.seed;
   if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
@@ -3985,9 +4100,9 @@ const G = {
   queues:[{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]},{barracks:[],factory:[],navalyard:[]}],
   myTeam:0, mpGame:false,
   placing:null, pendingCmd:null,
-  ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:315,z:-420}},
-       {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:300,z:330}},
-       {prodTimer:16, waveTimer:300, wave:0, comp:4, defendCd:0, provoked:-99, home:{x:-330,z:-330}}],
+  ais:[{prodTimer:6,  waveTimer:170, wave:0, comp:0, defendCd:0, provoked:-99, home:{x:MAP.bases[1][0],z:MAP.bases[1][1]}},
+       {prodTimer:11, waveTimer:235, wave:0, comp:2, defendCd:0, provoked:-99, home:{x:MAP.bases[2][0],z:MAP.bases[2][1]}},
+       {prodTimer:16, waveTimer:300, wave:0, comp:4, defendCd:0, provoked:-99, home:{x:MAP.bases[3][0],z:MAP.bases[3][1]}}],
   muted:false, lowPowerMsg:0, lastSight:-99
 };
 G.ai=G.ais[0];
@@ -4000,6 +4115,7 @@ const d2=(ax,az,bx,bz)=>{const dx=ax-bx,dz=az-bz;return dx*dx+dz*dz;};
 let SRNG=null;
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 function seedRng(sd){SRNG=mulberry32(sd>>>0);}
+seedRng((MAP.seed||1)>>>0);   // props/scatter deterministic per map; MP re-seeds from the room seed before buildWorld
 const rand=(a,b)=>a+(SRNG?SRNG():Math.random())*(b-a);
 const vrand=(a,b)=>a+Math.random()*(b-a);
 
@@ -4023,9 +4139,8 @@ const FLATS=[
   {x:-60,z:120,r:9},{x:60,z:-120,r:9},{x:240,z:-60,r:9},{x:-240,z:90,r:9},
   {x:90,z:-270,r:9},{x:-90,z:300,r:9}
 ];
-function shoreX(z){return SHORE+Math.sin((z+WSZ)*0.05)*10+Math.sin((z+WSZ)*0.017)*6;}
-const ISLES=[{x:500,z:-380,r:38,s:1.7},{x:530,z:80,r:52,s:4.1},
-             {x:480,z:330,r:30,s:0.6},{x:560,z:-120,r:24,s:2.9}];
+function shoreX(z){return SHORE+Math.sin((z+WSZ)*0.05)*MAP.shore.a1+Math.sin((z+WSZ)*0.017)*MAP.shore.a2;}
+const ISLES=MAP.isles;
 function isleD(x,z){
   let m=-1e3;
   for(const I of ISLES){
@@ -4330,7 +4445,7 @@ function buildPrimitiveProps(){
     const sc=rand(0.75,1.5);
     s.set(sc,sc*rand(0.9,1.15),sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
     p.set(x,gh,z); m.compose(p,q,s);
-    const pine=(gh>3.2)?Math.random()<0.8:Math.random()<0.4;
+    const pine=(gh>3.2)?rand(0,1)<0.8:rand(0,1)<0.4;
     if(pine && np<NP){ pI.setMatrixAt(np++,m); }
     else if(!pine && no<N-NP){ oI.setMatrixAt(no++,m); }
   }
@@ -4350,9 +4465,9 @@ function buildPrimitiveProps(){
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+3)*(f.r+3)){ok=false;break;} }
     if(!ok || x>shoreX(z)-5) continue;
     const gh=groundH(x,z);
-    if(gh<3.2 && Math.random()<0.65) continue;
+    if(gh<3.2 && rand(0,1)<0.65) continue;
     q.setFromEuler(new THREE.Euler(rand(0,3),rand(0,3),rand(0,3)));
-    if(Math.random()<0.6 && rn<R){
+    if(rand(0,1)<0.6 && rn<R){
       const sc=rand(0.5,1.8); s.set(sc,sc*rand(0.6,1),sc);
       p.set(x,gh+0.25,z); m.compose(p,q,s); rI.setMatrixAt(rn++,m); if(sc>0.75)pbAdd(x,z,0.8*sc);
     } else if(bn<B){
@@ -4391,7 +4506,7 @@ function buildModelProps(treeSets,rockSets){
     const gh=groundH(x,z);
     if(!ok || x>shoreX(z)-7 || gh<0.6 || gh>7.6) continue;
     if(vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80)<0.58) continue;
-    const r=Math.random();
+    const r=rand(0,1);
     let vi; if(r<0.08)vi=3; else if(gh>3.2)vi=(r<0.6?0:4); else vi=(r<0.55?1:2); vi%=TV.length;
     if(TV[vi].n>=TV[vi].ims[0].instanceMatrix.count) continue;
     const sc=rand(0.75,1.4);
@@ -4404,8 +4519,8 @@ function buildModelProps(treeSets,rockSets){
     let ok=true; for(const f of FLATS){ if(d2(x,z,f.x,f.z)<(f.r+3)*(f.r+3)){ok=false;break;} }
     if(!ok || x>shoreX(z)-5) continue;
     const gh=groundH(x,z);
-    if(gh<3.2 && Math.random()<0.6) continue;
-    const vi=Math.floor(Math.random()*RV.length);
+    if(gh<3.2 && rand(0,1)<0.6) continue;
+    const vi=Math.floor(rand(0,1)*RV.length);
     if(RV[vi].n>=RV[vi].ims[0].instanceMatrix.count) continue;
     const sc=rand(0.5,2.1);
     s.set(sc,sc*rand(0.6,1.0),sc*rand(0.8,1.2));
@@ -5994,8 +6109,8 @@ function scoutTarget(u){
   const cw=TSIZE/FOGN;
   let best=null,bd=1e12;
   for(let k=0;k<60;k++){
-    const i=(Math.random()*FOGN*FOGN)|0;
-    if(fog.explored[i])continue;
+    const i=(rand(0,1)*FOGN*FOGN)|0;
+    if(!G.mpGame&&fog.explored[i])continue;   // fog is per client: skip the check in MP or the sims diverge
     const cx=i%FOGN,cz=(i/FOGN)|0;
     const wx=(cx+0.5)*cw-TSIZE/2,wz=(cz+0.5)*cw-TSIZE/2;
     if(Math.abs(wx)>HALF-8||Math.abs(wz)>HALF-8)continue;
@@ -6554,25 +6669,12 @@ function announce(txt){
 
 /* ============================ WORLD SETUP ============================ */
 function buildWorld(){
-  /* mainland ore */
-  spawnOreField(-255,285,12,1.2);spawnOreField(-345,225,12,1.2);spawnOreField(-282,360,11,1.2);
-  spawnOreField(240,-360,12,1.2);spawnOreField(345,-330,12,1.2);spawnOreField(390,-435,11,1.2);
-  spawnOreField(225,300,11,1);spawnOreField(345,255,10,1);spawnOreField(375,375,10,1);
-  spawnOreField(-240,-300,11,1);spawnOreField(-390,-255,10,1);spawnOreField(-300,-420,10,1);
-  spawnOreField(0,30,14,1.6);spawnOreField(-45,-30,14,1.6);spawnOreField(45,-15,12,1.4);
-  spawnOreField(-150,150,10,1.1);spawnOreField(150,-150,10,1.1);
-  spawnOreField(-120,-90,10,1);spawnOreField(120,120,10,1);
-  spawnOreField(30,210,10,1);spawnOreField(-30,-210,10,1);
-  spawnOreField(180,60,10,1.1);spawnOreField(-180,30,10,1.1);
-  spawnOreField(-60,120,9,1);spawnOreField(60,-120,9,1);
-  spawnOreField(240,-60,9,1);spawnOreField(-240,90,9,1);
-  spawnOreField(90,-270,9,1);spawnOreField(-90,300,9,1);
-  /* island riches: bring a Landing Craft */
-  spawnOreField(500,-380,10,2);spawnOreField(530,80,12,2);spawnOreField(480,330,8,1.8);
+  for(const[x,z,c,r]of MAP.ore)spawnOreField(x,z,c,r);
   if(!G.mpGame){
   /* player */
-  spawnBuilding('conyard',-315,315,0);
-  spawnUnit('rifleman',-309,321,0);spawnUnit('rifleman',-321,321,0);
+  spawnBuilding('conyard',MAP.bases[0][0],MAP.bases[0][1],0);
+  spawnUnit('rifleman',MAP.bases[0][0]+6,MAP.bases[0][1]+6,0);
+  spawnUnit('rifleman',MAP.bases[0][0]-6,MAP.bases[0][1]+6,0);
   /* enemy faction bases */
   function enemyBase(team,bx,bz){
     spawnBuilding('conyard',bx,bz,team);
@@ -6588,7 +6690,7 @@ function buildWorld(){
       u.order={mode:'guard',anchor:{x:bx+ox,z:bz+oz}};
     }
   }
-  enemyBase(1,315,-420);enemyBase(2,300,330);enemyBase(3,-330,-330);
+  for(let t=1;t<=3;t++)enemyBase(t,MAP.bases[t][0],MAP.bases[t][1]);
   /* forward outposts */
   function outpost(team,ox,oz){
     spawnBuilding('turret',ox,oz,team);
@@ -6599,8 +6701,8 @@ function buildWorld(){
       u.order={mode:'guard',anchor:{x:ox+dx,z:oz+dz}};
     }
   }
-  outpost(1,40,-100);outpost(2,90,180);outpost(3,-160,-60);
-  cam.x=-315;cam.z=315;
+  for(const[t,ox,oz]of MAP.outposts)outpost(t,ox,oz);
+  cam.x=MAP.bases[0][0];cam.z=MAP.bases[0][1];
   }
   initSidebar();refreshSquadUI();
   updateFog();drawMinimap();
@@ -7079,13 +7181,13 @@ function addTerrainDressing(){
   for(let i=0;i<18;i++){
     const x=-20+i*6, z=-78+Math.sin(i*0.7)*10;
     if(isWater(x,z))continue;
-    const r=new THREE.Mesh(new THREE.DodecahedronGeometry(1.8+Math.random()*1.8,0),ridgeMat);
-    r.position.set(x,groundH(x,z)+1,z);r.scale.y=0.55+Math.random()*0.6;r.castShadow=true;scene.add(r);
+    const r=new THREE.Mesh(new THREE.DodecahedronGeometry(1.8+rand(0,1.8),0),ridgeMat);
+    r.position.set(x,groundH(x,z)+1,z);r.scale.y=0.55+rand(0,0.6);r.castShadow=true;scene.add(r);
   }
   const wreckMat=new THREE.MeshLambertMaterial({color:0x22202a});
   for(const p of [{x:2,z:12},{x:45,z:-10},{x:-42,z:-38},{x:82,z:34}]){
     const w=new THREE.Mesh(new THREE.BoxGeometry(6,1.2,2.4),wreckMat);
-    w.position.set(p.x,groundH(p.x,p.z)+0.8,p.z);w.rotation.y=Math.random()*6.28;w.castShadow=true;scene.add(w);
+    w.position.set(p.x,groundH(p.x,p.z)+0.8,p.z);w.rotation.y=rand(0,6.28);w.castShadow=true;scene.add(w);
   }
 }
 
@@ -7097,34 +7199,33 @@ buildWorld=function(){
   const pcy=G.ents.find(e=>!e.dead&&e.team===0&&e.type==='conyard');
   if(pcy){pcy.dead=true;scene.remove(pcy.mesh);G.ents=G.ents.filter(e=>e!==pcy);}
   addTerrainDressing();
-  /* richer, wider economy (shared with skirmish) */
-  spawnOreField(354,156,12,1.25);spawnOreField(348,246,10,1.1);
-  spawnOreField(312,144,14,1.45);spawnOreField(270,198,10,1.2);spawnOreField(360,282,8,1.2);
-  spawnOreField(-96,264,12,1.1);spawnOreField(102,246,12,1.1);
-  spawnOreField(-288,-60,10,1.15);spawnOreField(282,-6,10,1.25);
   if(G.mpGame){mpSymmetricStart();return;}
   /* convoy */
-  const hq=spawnUnit('mobilehq',-286,282,0);
-  const e1=spawnUnit('apc',-292,288,0);
-  const e2=spawnUnit('rocketeer',-294,276,0);
-  [hq,e1,e2].forEach((u,i)=>{u.dest={x:-268+i*3,z:268-i*3};u.order={mode:i===0?'move':'amove'};});
+  const CV=MAP.convoy, sgn=CV.z>=0?1:-1;
+  const hq=spawnUnit('mobilehq',CV.x,CV.z,0);
+  const e1=spawnUnit('apc',CV.x-6,CV.z+6,0);
+  const e2=spawnUnit('rocketeer',CV.x-8,CV.z-6,0);
+  [hq,e1,e2].forEach((u,i)=>{u.dest={x:CV.x+18+i*3,z:CV.z-14*sgn-i*3*sgn};u.order={mode:i===0?'move':'amove'};});
   G.ents.filter(e=>!e.dead&&e.team===0&&e.type==='rifleman').forEach((u,i)=>{
-    u.pos.x=-298+i*4;u.pos.z=280-i*6;u.pos.y=groundH(u.pos.x,u.pos.z);
-    u.dest={x:-272+i*3,z:264+i*3};u.order={mode:'amove'};
+    u.pos.x=CV.x-12+i*4;u.pos.z=CV.z-2-i*6*sgn;u.pos.y=groundH(u.pos.x,u.pos.z);
+    u.dest={x:CV.x+14+i*3,z:CV.z-18*sgn+i*3*sgn};u.order={mode:'amove'};
   });
   /* naval escort waiting off the coast */
-  const bgx=shoreX(252)+24, cgx=shoreX(238)+24;
-  const boat=spawnUnit('gunboat',bgx,252,0);boat.order={mode:'guard',anchor:{x:bgx,z:252}};
-  const craft=spawnUnit('landingcraft',cgx,238,0);craft.order={mode:'guard',anchor:{x:cgx,z:238}};
+  const pz1=MAP.navy.p[0], pz2=MAP.navy.p[1];
+  const bgx=shoreX(pz1)+24, cgx=shoreX(pz2)+24;
+  const boat=spawnUnit('gunboat',bgx,pz1,0);boat.order={mode:'guard',anchor:{x:bgx,z:pz1}};
+  const craft=spawnUnit('landingcraft',cgx,pz2,0);craft.order={mode:'guard',anchor:{x:cgx,z:pz2}};
   /* enemy drone tech */
-  spawnBuilding('dronebay',329,-441,1);
-  spawnBuilding('robotics',336,-429,1);
+  const B1=MAP.bases[1];
+  spawnBuilding('dronebay',B1[0]+14,B1[1]-21,1);
+  spawnBuilding('robotics',B1[0]+21,B1[1]-9,1);
   /* enemy sea patrol */
-  const ebx=shoreX(10)+26, ecx=shoreX(-174)+30;
-  const eb=spawnUnit('gunboat',ebx,10,1);eb.order={mode:'guard',anchor:{x:ebx,z:10}};
-  const ec=spawnUnit('corvette',ecx,-174,1);ec.order={mode:'guard',anchor:{x:ecx,z:-174}};
+  const ez1=MAP.navy.e[0], ez2=MAP.navy.e[1];
+  const ebx=shoreX(ez1)+26, ecx=shoreX(ez2)+30;
+  const eb=spawnUnit('gunboat',ebx,ez1,1);eb.order={mode:'guard',anchor:{x:ebx,z:ez1}};
+  const ec=spawnUnit('corvette',ecx,ez2,1);ec.order={mode:'guard',anchor:{x:ecx,z:ez2}};
   /* forward camps */
-  const camps=[{x:165,z:156,t:2},{x:-174,z:-210,t:3},{x:312,z:54,t:1}];
+  const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:c[2]}));
   camps.forEach((c,idx)=>{
     spawnBuilding('turret',c.x,c.z,c.t);
     if(idx===1)spawnBuilding('dronebay',c.x+8,c.z+7,c.t);
@@ -7134,13 +7235,13 @@ buildWorld=function(){
   });
   ['dogbot','droneugv'].forEach(t=>{if(!AI_COMP.includes(t))AI_COMP.push(t);});
   G.credits[0]=Math.max(G.credits[0],9500);
-  cam.x=-280;cam.z=278;
+  cam.x=MAP.cam.x;cam.z=MAP.cam.z;
   setSelection([hq]);
   announce('Convoy inbound: reach open ground and press DEP to deploy the Mobile HQ');
 };
 
 function mpSymmetricStart(){
-  const bases=[{x:-315,z:315},{x:315,z:-420}];
+  const bases=[{x:MAP.bases[0][0],z:MAP.bases[0][1]},{x:MAP.bases[1][0],z:MAP.bases[1][1]}];
   for(let T=0;T<2;T++){
     const b=bases[T], f=T===0?-1:1;
     spawnBuilding('conyard',b.x,b.z,T);
@@ -7388,7 +7489,9 @@ const NET=(function(){
   async function createRoom(){
     status('Creating room...');
     try{
-      const r=await fetch(API+'/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:pName()+"'s match",public:true})});
+      const rnd=(crypto.getRandomValues(new Uint32Array(1))[0]>>>3)<<3;
+      const seed=(rnd|(MAP.idx&7))>>>0;
+      const r=await fetch(API+'/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:pName()+"'s match",public:true,seed})});
       const d=await r.json();
       if(!d.code){status('Create failed');return;}
       joinRoom(d.code);
@@ -7415,7 +7518,7 @@ const NET=(function(){
     panel.querySelector('#mpHome').style.display='none';
     panel.querySelector('#mpRoom').style.display='';
     panel.querySelector('#mpRoomCode').textContent=N.code;
-    panel.querySelector('#mpRoomInfo').textContent='Region '+N.region+(N.ping?' · ping '+N.ping+'ms':'');
+    panel.querySelector('#mpRoomInfo').textContent=MAP.name+' · '+N.region+(N.ping?' · ping '+N.ping+'ms':'');
     const pl=panel.querySelector('#mpPlayers');pl.innerHTML='';
     for(let i=0;i<N.max;i++){
       const p=N.players.find(q=>q.slot===i);
@@ -7434,6 +7537,15 @@ const NET=(function(){
     switch(m.t){
       case 'joined':
         N.slot=m.slot;N.seed=m.seed;N.max=m.max;N.region=m.region;N.players=m.players||[];
+        {const want=((m.seed>>>0)&7)%MAPS.length;   // any seed resolves to a real theatre on both clients
+         if(want!==MAP.idx&&MAPS[want]){
+           status('Loading '+MAPS[want].name+'...');
+           try{sessionStorage.setItem('bm_mp_join',N.code);
+               localStorage.setItem('bm_map',MAPS[want].id);}catch(e){}
+           try{if(N.ws)N.ws.close();}catch(e){}
+           const u=new URL(location.href);u.searchParams.delete('map');location.replace(u.toString());
+           return;
+         }}
         status('');showRoom();break;
       case 'players':N.players=m.players;showRoom();break;
       case 'pong':N.ping=Date.now()-m.ts;if(panel&&panel.style.display!=='none')showRoom();break;
@@ -7477,10 +7589,16 @@ const NET=(function(){
   function sendCmd(c){
     if(N.ws&&N.ws.readyState===1)N.ws.send(JSON.stringify({t:'cmd',c:[c]}));
   }
-  return {get on(){return N.on;},pump,sendCmd,openLobby,state:N};
+  return {get on(){return N.on;},pump,sendCmd,openLobby,joinRoom,state:N};
 })();
 window.NET=NET;
 document.getElementById('mpbtn').addEventListener('click',()=>{try{ensureAudio();}catch(e){}NET.openLobby();});
+/* returning from a map reload triggered by the host's theatre choice: rejoin */
+(function(){
+  let code=null;
+  try{code=sessionStorage.getItem('bm_mp_join');sessionStorage.removeItem('bm_mp_join');}catch(e){}
+  if(code)setTimeout(()=>{try{ensureAudio();}catch(e){}NET.openLobby();NET.joinRoom(code);},60);
+})();
 
 /* ============================ START / END ============================ */
 function endGame(win){
@@ -7494,6 +7612,27 @@ function endGame(win){
   document.getElementById('endscreen').style.display='flex';
   sfx.end(win);
 }
+/* ---------- map picker ---------- */
+(function(){
+  const sel=document.getElementById('mapsel'), bl=document.getElementById('mapblurb');
+  if(!sel)return;
+  MAPS.forEach(m=>{
+    const b=document.createElement('button');
+    b.className='mcard'+(m.id===MAP.id?' on':'');
+    b.innerHTML='<span class="mn">'+m.name+'</span><span class="ms">'+m.sub+'</span>';
+    b.onclick=()=>{
+      if(m.id===MAP.id)return;
+      if(built){announce('Restarting on '+m.name);}
+      try{localStorage.setItem('bm_map',m.id);}catch(e){}
+      const u=new URL(location.href);u.searchParams.delete('map');location.replace(u.toString());
+    };
+    sel.appendChild(b);
+  });
+  bl.textContent=MAP.blurb;
+  const sub=document.querySelector('#overlay .sub');
+  if(sub)sub.textContent='Operation '+MAP.name+' \u00b7 v0.5';
+})();
+
 let built=false;
 function startOrResume(ev){
   if(ev){ ev.preventDefault(); ev.stopPropagation(); }
