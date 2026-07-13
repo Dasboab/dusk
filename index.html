@@ -4259,14 +4259,17 @@ scene.add(sun);
 
 /* terrain */
 let terrainGeoParams;
+let _terrGeoCache=null;
 function buildTerrainGeo(){
+  if(_terrGeoCache)return _terrGeoCache.clone();
   const seg=IS_TOUCH?200:288;
   const geo=new THREE.PlaneGeometry(TSIZE,TSIZE,seg,seg);
   geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position;
   for(let i=0;i<pos.count;i++) pos.setY(i, groundH(pos.getX(i), pos.getZ(i)));
   geo.computeVertexNormals();
-  return geo;
+  _terrGeoCache=geo;
+  return geo.clone();
 }
 {
   const geo=buildTerrainGeo();
@@ -4513,16 +4516,64 @@ function propBlocked(x,z,pad){
   }
   return false;
 }
+const PCHUNK=80;                                   // world units per prop cell
+const PCELLS=Math.ceil((2*HALF)/PCHUNK);
+const pcx=x=>clamp(Math.floor((x+HALF)/PCHUNK),0,PCELLS-1);
+const pcz=z=>clamp(Math.floor((z+HALF)/PCHUNK),0,PCELLS-1);
 function buildModelProps(treeSets,rockSets){
   const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3(), p=new THREE.Vector3();
   const N=IS_TOUCH?700:1100, R=IS_TOUCH?560:620;
-  const cap=v=>Math.ceil((v===treeSets?N:R)/5)+40;
-  const mk=sets=>sets.map(parts=>{
-    const ims=parts.map(pt=>{const im=new THREE.InstancedMesh(pt.geo,pt.mat,cap(sets));im.castShadow=true;im.count=0;scene.add(im);return im;});
-    return {ims,n:0};
-  });
+  /* pass 1: decide every placement up front, bucketed by grid cell */
+  const half=PCHUNK/2, diag=Math.SQRT2*half;
+  const mk=sets=>sets.map(parts=>({parts,cells:new Map()}));   // cells: key -> [matrix,...]
   const TV=mk(treeSets), RV=mk(rockSets);
-  const put=(V,i,mat)=>{const v=V[i];for(const im of v.ims)im.setMatrixAt(v.n,mat);v.n++;for(const im of v.ims)im.count=v.n;};
+  const tmpM=new THREE.Matrix4();
+  const put=(V,i,mat)=>{
+    const v=V[i];
+    /* re-express the matrix relative to its cell centre so the cell can be culled as a unit */
+    const px=mat.elements[12], pz=mat.elements[14];
+    const cx=pcx(px), cz=pcz(pz);
+    const ccx=-HALF+cx*PCHUNK+half, ccz=-HALF+cz*PCHUNK+half;
+    tmpM.copy(mat);
+    tmpM.elements[12]=px-ccx; tmpM.elements[14]=pz-ccz;
+    const key=cx+','+cz;
+    let l=v.cells.get(key);
+    if(!l){l=[];v.cells.set(key,l);}
+    l.push(tmpM.clone());
+    v.n=(v.n||0)+1;
+  };
+  /* pass 2 (at the end): turn each bucket into its own InstancedMesh */
+  const flush=(V)=>{
+    for(const v of V){
+      for(const[key,list]of v.cells){
+        const[cx,cz]=key.split(',').map(Number);
+        const ccx=-HALF+cx*PCHUNK+half, ccz=-HALF+cz*PCHUNK+half;
+        for(const pt of v.parts){
+          /* Three culls a mesh by geometry.boundingSphere transformed by matrixWorld.
+             Instances are stored relative to their cell centre and the mesh sits at that
+             centre, so ONE shared sphere big enough to hold a cell works for every cell,
+             with no geometry duplication. */
+          if(!pt.geo.boundingSphere)pt.geo.computeBoundingSphere();
+          if(!pt.geo.userData._cellBounds){
+            const r0=pt.geo.boundingSphere?pt.geo.boundingSphere.radius:4;
+            pt.geo.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,0),diag+r0*4);
+            pt.geo.userData._cellBounds=true;
+          }
+          const im=new THREE.InstancedMesh(pt.geo,pt.mat,list.length);
+          im.castShadow=true;
+          im.frustumCulled=true;
+          im.position.set(ccx,0,ccz);
+          im.updateMatrix();
+          for(let i=0;i<list.length;i++)im.setMatrixAt(i,list[i]);
+          im.count=list.length;
+          im.instanceMatrix.needsUpdate=true;
+          scene.add(im);
+          PROP_MESHES.push(im);
+        }
+      }
+    }
+  };
+  V_FLUSH.push(()=>{flush(TV);flush(RV);});
   let placed=0, guard=0;
   while(placed<N && guard++<24000){
     const x=rand(-HALF+4,HALF-4), z=rand(-HALF+4,HALF-4);
@@ -4532,7 +4583,7 @@ function buildModelProps(treeSets,rockSets){
     if(vnoise((x+WSX)*0.045+50,(z+WSZ)*0.045+80)<0.58) continue;
     const r=rand(0,1);
     let vi; if(r<0.08)vi=3; else if(gh>3.2)vi=(r<0.6?0:4); else vi=(r<0.55?1:2); vi%=TV.length;
-    if(TV[vi].n>=TV[vi].ims[0].instanceMatrix.count) continue;
+    
     const sc=rand(0.75,1.4);
     s.set(sc,sc*rand(0.9,1.15),sc); q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
     p.set(x,gh-0.05,z); m.compose(p,q,s); put(TV,vi,m); pbAdd(x,z,0.45*sc); placed++;
@@ -4545,13 +4596,16 @@ function buildModelProps(treeSets,rockSets){
     const gh=groundH(x,z);
     if(gh<3.2 && rand(0,1)<0.6) continue;
     const vi=Math.floor(rand(0,1)*RV.length);
-    if(RV[vi].n>=RV[vi].ims[0].instanceMatrix.count) continue;
+    
     const sc=rand(0.5,2.1);
     s.set(sc,sc*rand(0.6,1.0),sc*rand(0.8,1.2));
     q.setFromAxisAngle(new THREE.Vector3(0,1,0),rand(0,6.28));
     p.set(x,gh-0.12,z); m.compose(p,q,s); put(RV,vi,m); if(sc>0.75)pbAdd(x,z,0.85*sc); placed++;
   }
+  for(const f of V_FLUSH)f();
+  V_FLUSH.length=0;
 }
+const PROP_MESHES=[], V_FLUSH=[];
 {
   const gl=new THREE.GLTFLoader();
   const loadProp=(n,tH)=>new Promise((res,rej)=>gl.load('assets/props/'+n+'.glb',g=>{
