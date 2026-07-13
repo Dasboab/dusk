@@ -43,6 +43,22 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .tbtn:hover{color:var(--amber);border-color:var(--amber);}
 .tbtn.arm{color:#0d0a16;background:var(--amber);border-color:var(--amber);}
 
+#selgrp{display:flex;gap:4px;}
+#selgrp .tbtn{padding:6px 8px;}
+#selgrp .tbtn i{font-style:normal;}
+#selgrp .tbtn .lg{display:inline;}
+#selgrp .tbtn .sm{display:none;}
+@media (max-width:760px){
+  #selgrp{gap:2px;}
+  #selgrp .tbtn{padding:6px 5px;letter-spacing:0;}
+  #selgrp .tbtn .lg{display:none;}
+  #selgrp .tbtn .sm{display:inline;}
+  #topbar{gap:4px;padding:0 5px;}
+  #powerwrap{display:none;}
+  #squads{display:none;}                 /* cohorts live on the dock's Squad tab */
+  .tbtn{padding:6px 5px;letter-spacing:0;font-size:9px;}
+}
+
 /* map picker */
 #mapsel{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 4px;text-align:left;}
 .mcard{position:relative;border:1px solid rgba(109,79,42,.8);border-radius:3px;padding:9px 10px 8px;
@@ -216,7 +232,12 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   <div id="squads">
     <button class="sq" data-i="0">I</button><button class="sq" data-i="1">II</button><button class="sq" data-i="2">III</button>
   </div>
-  <button class="tbtn" id="armybtn">Army</button>
+  <div id="selgrp">
+    <button class="tbtn" id="selAll" title="Select every unit"><span class="lg">All</span><span class="sm">All</span></button>
+    <button class="tbtn" id="selOff" title="Select every armed unit"><span class="lg">Offense</span><span class="sm">Off</span></button>
+    <button class="tbtn" id="selNav" title="Select the fleet"><span class="lg">Navy</span><span class="sm">Sea</span></button>
+    <button class="tbtn" id="selAir" title="Select all aircraft"><span class="lg">Air</span><span class="sm">Air</span></button>
+  </div>
   <button class="tbtn" id="boxbtn">Box</button>
   <div class="spacer"></div>
   <button class="tbtn" id="mutebtn">Snd On</button>
@@ -244,6 +265,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   <button class="cbtn" id="cDeploy"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v7M9.4 6.4L12 9l2.6-2.6"/><path d="M5 12.5h14V20H5z"/><path d="M9 20v-4h6v4"/></svg><small>deploy</small></button>
   <button class="cbtn" id="cSquad"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.1"/><path d="M4 20c0-3.4 2.2-5.6 5-5.6s5 2.2 5 5.6"/><circle cx="16.5" cy="9" r="2.4"/><path d="M15.5 20c.3-2.8 1.9-4.6 4-4.6 1 0 1.9.4 2.5 1"/></svg><small>cohort</small></button>
   <button class="cbtn" id="cType"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.5a4 4 0 0 1 0-5.6l3-3a4 4 0 0 1 5.6 5.6L17 13"/><path d="M14 9.5a4 4 0 0 1 0 5.6l-3 3a4 4 0 0 1-5.6-5.6L7 11"/></svg><small>same type</small></button>
+  <button class="cbtn" id="cRepair"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a3.6 3.6 0 0 0 4.8 4.6l-8.4 8.4a2.2 2.2 0 0 1-3.1-3.1l8.4-8.4a3.6 3.6 0 0 0-1.7-1.5z"/><path d="M5 5l3.5 3.5"/></svg><small>repair</small></button>
+  <button class="cbtn" id="cGarrison"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10l8-5 8 5v9"/><path d="M8 19v-4h8v4"/><path d="M8 11h3"/></svg><small>garrison</small></button>
+  <button class="cbtn" id="cDig"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16"/><path d="M6 18v-3.5A3.5 3.5 0 0 1 9.5 11H14"/><path d="M13 8.5l6 2.5"/><circle cx="8" cy="15.5" r="1.4"/></svg><small>dig in</small></button>
   <button class="cbtn" id="cStop"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" fill="currentColor" stroke="none"/></svg><small>stop</small></button>
   <button class="cbtn" id="cDesel"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 7L7 17"/></svg><small>clear</small></button>
  </div>
@@ -3994,7 +4018,7 @@ const MAPS = [
     convoy:{x:-360,z:355}, cam:{x:-354,z:350},
     outposts:[[1,120,-60],[2,140,150],[3,-150,-120]],
     camps:[[60,110,2],[-110,-140,3],[190,-30,1]],
-    navy:{p:[240,225], e:[20,-160]},
+    navy:null,   // Iron Ridge is a land war: no starting fleet
     ore:[[-15,15,16,1.8],[45,-45,15,1.7],[-60,60,15,1.7],[15,90,14,1.6],[-90,-30,14,1.6],
          [105,15,13,1.5],[-120,105,12,1.4],[120,-105,12,1.4],[0,-135,12,1.4],
          [180,60,11,1.2],[-180,-60,11,1.2],[75,180,11,1.2],[-75,-180,11,1.2],
@@ -4964,14 +4988,15 @@ mmCanvas.addEventListener('pointerdown',e=>{e.preventDefault();mmNav(e);
 /* ============================ COMMAND BAR ============================ */
 const cmdbar=document.getElementById('cmdbar');
 const CB={};
-for(const id of['cAttack','cPatrol','cGuard','cProtect','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel'])
+for(const id of['cAttack','cPatrol','cGuard','cProtect','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel','cRepair','cGarrison','cDig'])
   CB[id]=document.getElementById(id);
 function clearPending(){G.pendingCmd=null;for(const k in CB)CB[k].classList.remove('arm');}
 function armCmd(cmd,btn){
   if(G.pendingCmd===cmd){clearPending();return;}
   clearPending();G.pendingCmd=cmd;btn.classList.add('arm');
   announce({attack:'Select attack target',patrol:'Select patrol point',guard:'Select guard position',
-            protect:'Select a friendly unit to protect',board:'Select an IFV',rally:'Set rally point'}[cmd]);
+            protect:'Select a friendly unit to protect',board:'Select an IFV',rally:'Set rally point',
+            fix:'Select a damaged building to repair',garrison:'Select a bunker to garrison'}[cmd]);
 }
 CB.cAttack.onclick=()=>armCmd('attack',CB.cAttack);
 CB.cPatrol.onclick=()=>armCmd('patrol',CB.cPatrol);
@@ -5045,10 +5070,7 @@ function refreshSquadUI(){
   });
 }
 document.querySelectorAll('.sq').forEach(b=>b.onclick=()=>selectSquad(+b.dataset.i));
-document.getElementById('armybtn').onclick=()=>{
-  const a=G.ents.filter(e=>!e.dead&&e.team===G.myTeam&&e.cat==='u'&&e.type!=='harvester');
-  if(a.length){setSelection(a);sfx.click();}
-};
+
 const boxbtn=document.getElementById('boxbtn');
 if(!IS_TOUCH)boxbtn.style.display='none';
 boxbtn.onclick=()=>{boxArm=!boxArm;boxbtn.classList.toggle('arm',boxArm);
@@ -5717,6 +5739,11 @@ function execCmd(team,c){
     case 'pl':_placeBuilding(team,c.type,c.x,c.z);break;
     case 'ra':{const b=entById(c.b);if(b&&!b.dead&&b.team===team&&b.cat==='b')_setRally(b,c.x,c.z);break;}
     case 'dp':{const u=entById(c.id);if(u&&!u.dead&&u.team===team&&u.type==='mobilehq')_deployHQ(u);break;}
+    case 'rp':_ordRepair(cmdUnits(team,c));break;
+    case 'fx':{const b=entById(c.tg);if(b&&!b.dead&&b.cat==='b'&&b.team===team)_ordFix(cmdUnits(team,c),b);break;}
+    case 'gr':{const b=entById(c.tg);if(b&&!b.dead&&b.type==='bunker'&&b.team===team)_ordGarrison(cmdUnits(team,c),b);break;}
+    case 'ej':{const b=entById(c.tg);if(b&&!b.dead&&b.type==='bunker'&&b.team===team)_ordEject(b);break;}
+    case 'dy':_ordDeploy(cmdUnits(team,c));break;
   }
 }
 /* ---- senders (local UI, sfx feedback) ---- */
@@ -5852,21 +5879,25 @@ function _setRally(b,x,z){
 }
 
 /* ============================ COMBAT ============================ */
-function nearestEnemy(cx,cz,r,team){
+function nearestEnemy(cx,cz,r,team,filt){
   let best=null,bd=r*r;
   for(const e of G.ents){
     if(e.dead||e.team===team)continue;
+    if(e.inside)continue;                        // garrisoned troops are not targetable
+    if(filt&&!filt(e))continue;
     const dd=d2(cx,cz,e.pos.x,e.pos.z);
     if(dd<bd){bd=dd;best=e;}
   }
   return best;
 }
+const isAir=e=>e.def.domain==='air';
+function acqFilter(u){return (u.def.weapon&&u.def.weapon.airOnly)?isAir:null;}
 function muzzleY(u){
   if(u.cat==='b')return u.pos.y+2.6;
   return u.pos.y+(u.type==='heavy'?2.3:u.type==='tank'?1.9:u.type==='apc'?2.1:u.type==='mlrs'?2.6:u.type==='corvette'?2.6:u.type==='gunboat'?1.8:u.type==='harvester'?1.4:1.2);
 }
 function fireWeapon(u,t){
-  const w=u.def.weapon;
+  const w=(u.deployed&&u.def.deployed)?u.def.deployed:u.def.weapon;
   u.cd=w.cd*(u.rank>0?1-u.rank*0.08:1);
   const from=new THREE.Vector3(u.pos.x,muzzleY(u),u.pos.z);
   const dir=tmpV2.set(t.pos.x-u.pos.x,0,t.pos.z-u.pos.z).normalize();
@@ -6082,8 +6113,17 @@ function aimTurret(u,t,dt){
   tur.rotation.y+=d*Math.min(1,dt*8);
 }
 function engage(u,dt){
-  const t=u.target,w=u.def.weapon;
+  const t=u.target,w=(u.deployed&&u.def.deployed)?u.def.deployed:u.def.weapon;
   const dist=Math.hypot(t.pos.x-u.pos.x,t.pos.z-u.pos.z);
+  if(u.deployed){                       // dug in: never chases, just traverses and fires
+    if(dist<=w.range){u.dest=null;aimTurret(u,t,dt);
+      const ty=Math.atan2(t.pos.x-u.pos.x,t.pos.z-u.pos.z)+Math.PI;
+      let d=ty-u.mesh.rotation.y;while(d>Math.PI)d-=6.283;while(d<-Math.PI)d+=6.283;
+      u.mesh.rotation.y+=d*Math.min(1,dt*6);
+      if(u.cd<=0)fireWeapon(u,t);
+    } else u.target=null;
+    return;
+  }
   if(w.minRange&&dist<w.minRange&&dist>0.5){
     const ax=u.pos.x+(u.pos.x-t.pos.x)/dist*6, az=u.pos.z+(u.pos.z-t.pos.z)/dist*6;
     u.dest={x:clamp(ax,-HALF,HALF),z:clamp(az,-HALF,HALF)};
@@ -6159,10 +6199,10 @@ function updateUnit(u,dt){
   u.scanT=(u.scanT||0)-dt;
   if(!u.target&&u.def.weapon&&!u.noAcq&&u.scanT<=0){
     u.scanT=0.25;
-    let tgt=null;
-    if(m==='guard')tgt=nearestEnemy(u.order.anchor.x,u.order.anchor.z,26,u.team);
-    else if(u.order.mode==='escort')tgt=nearestEnemy(u.order.tgt.pos.x,u.order.tgt.pos.z,24,u.team);
-    else tgt=nearestEnemy(u.pos.x,u.pos.z,u.sight,u.team);
+    let tgt=null;const fl=acqFilter(u);
+    if(m==='guard')tgt=nearestEnemy(u.order.anchor.x,u.order.anchor.z,26,u.team,fl);
+    else if(u.order.mode==='escort')tgt=nearestEnemy(u.order.tgt.pos.x,u.order.tgt.pos.z,24,u.team,fl);
+    else tgt=nearestEnemy(u.pos.x,u.pos.z,u.sight,u.team,fl);
     if(tgt){u.target=tgt;if(!u.engFrom)u.engFrom={x:u.pos.x,z:u.pos.z};}
   }
   if(u.target&&m!=='scout'){engage(u,dt);animEnt(u,dt);return;}
@@ -6810,7 +6850,391 @@ VEH_ORDER.push('mobilehq','dogbot','droneugv','reconuav','fpvdrone','strikeuav')
 NAV_ORDER.unshift('landingcraft'); NAV_ORDER.push('coastalfrigate');
 G.queues.dronebay=[];G.queues.robotics=[];G.queues.ewcenter=[];G.queues.airfield=[];
 
+/* ==================== V0.6 REPAIR, DEFENCE, AIR ==================== */
+/* ---------- repair depots (one per domain) ---------- */
+BDEF.mechbay  ={name:'Mechanic Station', cost:900,  time:10, hp:1100, power:-15, size:9,  sight:18, prereq:'factory',
+                repairs:'veh',   blurb:'Vehicles return here to be rebuilt'};
+BDEF.drydock  ={name:'Naval Dry Dock',   cost:1000, time:12, hp:1200, power:-20, size:10, sight:18, prereq:'navalyard',
+                repairs:'sea',   blurb:'Hull repairs for the fleet'};
+BDEF.airhangar={name:'Air Hangar',       cost:1200, time:13, hp:1200, power:-20, size:11, sight:20, prereq:'airfield',
+                repairs:'air',   blurb:'Airframe servicing and rearm'};
+BDEF.dronetech={name:'Drone Technician',  cost:700,  time:8,  hp:800,  power:-10, size:7,  sight:18, prereq:'dronebay',
+                repairs:'drone', blurb:'Bench repairs for drones and bots'};
+BDEF.bunker   ={name:'Bunker',           cost:450,  time:7,  hp:1800, power:-5,  size:6,  sight:24, prereq:'barracks',
+                garrison:4,      blurb:'Garrison infantry: they fire out, hard to kill'};
+BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','airhangar','dronetech','bunker');
+
+/* which depot repairs a given unit */
+function repairClass(u){
+  const d=u.def;
+  if(d.drone)return 'drone';
+  if(d.domain==='air')return 'air';
+  if(d.domain==='sea')return 'sea';
+  if(d.armor==='veh')return 'veh';
+  return null;                       // infantry heal at a bunker instead
+}
+/* tag the robot/drone units so the Drone Technician claims them */
+['reconuav','fpvdrone','strikeuav','dogbot','droneugv'].forEach(t=>{if(UDEF[t])UDEF[t].drone=true;});
+
+/* ---------- engineer ---------- */
+UDEF.engineer ={name:'Combat Engineer', cost:400, time:6, hp:110, speed:8.4, r:0.9, sight:16, armor:'inf', from:'barracks',
+                blurb:'Repairs buildings under fire', engineer:true, repairRate:70};
+
+/* ---------- deployable machine gunner ---------- */
+UDEF.mgteam   ={name:'MG Team',         cost:280, time:5, hp:140, speed:7.4, r:0.9, sight:20, armor:'inf', from:'barracks',
+                blurb:'Deploys into a static gun nest', deployable:true,
+                weapon:{dmg:7, range:13, cd:0.5, type:'bullet'},
+                deployed:{dmg:11, range:22, cd:0.22, type:'bullet'}};
+
+/* ---------- more air ---------- */
+UDEF.gunship  ={name:'Gunship Hydra',   cost:1500, time:15, hp:300, speed:17.0, r:2.0, sight:28, armor:'veh', from:'airfield',
+                domain:'air', blurb:'Rotary cannon, shreds ground',
+                weapon:{dmg:15, range:17, cd:0.28, type:'bullet'}};
+UDEF.bomber   ={name:'Bomber Kestrel',  cost:2000, time:19, hp:260, speed:22.0, r:2.2, sight:26, armor:'veh', from:'airfield',
+                domain:'air', blurb:'Levels structures, slow to rearm',
+                weapon:{dmg:120, range:6, cd:7.0, type:'shell', aoe:7}};
+UDEF.fighter  ={name:'Fighter Talon',   cost:1400, time:14, hp:220, speed:30.0, r:1.7, sight:32, armor:'veh', from:'airfield',
+                domain:'air', blurb:'Air superiority: hunts other aircraft',
+                weapon:{dmg:30, range:20, cd:0.9, type:'bullet', airOnly:true}};
+
+INF_ORDER.push('engineer','mgteam');
+VEH_ORDER.push('gunship','bomber','fighter');
+G.queues.mechbay=[];G.queues.drydock=[];G.queues.airhangar=[];G.queues.dronetech=[];G.queues.bunker=[];
+
+/* ---------- repair, garrison, deploy: sim ---------- */
+const REPAIR_R=14;                     // how close a unit must sit to a depot
+function depotFor(u){
+  const cls=repairClass(u);
+  if(!cls)return null;
+  let best=null,bd=1e12;
+  for(const b of G.ents){
+    if(b.dead||b.cat!=='b'||b.team!==u.team)continue;
+    if(BDEF[b.type].repairs!==cls)continue;
+    const dd=d2(u.pos.x,u.pos.z,b.pos.x,b.pos.z);
+    if(dd<bd){bd=dd;best=b;}
+  }
+  return best;
+}
+/* infantry mend inside a bunker instead */
+function bunkerFor(u){
+  let best=null,bd=1e12;
+  for(const b of G.ents){
+    if(b.dead||b.cat!=='b'||b.team!==u.team||b.type!=='bunker')continue;
+    if((b.garrison||[]).length>=BDEF.bunker.garrison)continue;
+    const dd=d2(u.pos.x,u.pos.z,b.pos.x,b.pos.z);
+    if(dd<bd){bd=dd;best=b;}
+  }
+  return best;
+}
+function _ordRepair(units){
+  for(const u of units){
+    if(u.def.engineer)continue;                       // engineers repair, they do not queue for it
+    if(u.hp>=u.maxhp)continue;
+    const dep=depotFor(u);
+    if(!dep)continue;
+    resetOrder(u);
+    u.order={mode:'servicing',depot:dep};
+    u.dest={x:dep.pos.x,z:dep.pos.z};
+  }
+}
+function _ordFix(units,b){                             // engineer -> damaged building
+  for(const u of units){
+    if(!u.def.engineer)continue;
+    resetOrder(u);
+    u.order={mode:'fixing',tgt:b};
+    u.dest={x:b.pos.x,z:b.pos.z};
+  }
+}
+function _ordGarrison(units,b){
+  for(const u of units){
+    if(u.def.armor!=='inf'||u.def.domain)continue;
+    resetOrder(u);
+    u.order={mode:'entering',tgt:b};
+    u.dest={x:b.pos.x,z:b.pos.z};
+  }
+}
+function setDeployed(u,v){
+  u.deployed=v;
+  const mg=u.mesh.userData.mg;
+  if(mg){mg.position.y=v?0.55:1.0;mg.position.z=v?0.75:0.42;}
+  u.mesh.scale.y=v?0.72:1;
+}
+function _ordDeploy(units){
+  for(const u of units){
+    if(!u.def.deployable)continue;
+    setDeployed(u,!u.deployed);
+    u.dest=null;u.target=null;
+    u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};
+  }
+}
+function _ordEject(b){
+  const gar=b.garrison||[];
+  const n=gar.length;
+  gar.forEach((u,i)=>{
+    const a=(i/Math.max(1,n))*6.283;
+    u.inside=null;u.mesh.visible=(u.team===G.myTeam)||fog.visible[cellIdx(b.pos.x,b.pos.z)]===1;
+    u.pos.x=clamp(b.pos.x+Math.cos(a)*(BDEF.bunker.size*0.6+1.4),-HALF,HALF);
+    u.pos.z=clamp(b.pos.z+Math.sin(a)*(BDEF.bunker.size*0.6+1.4),-HALF,HALF);
+    u.pos.y=groundH(u.pos.x,u.pos.z);
+    u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};
+  });
+  b.garrison=[];
+}
+/* bunkers shoot with whatever is inside them */
+function bunkerTick(b,dt){
+  const gar=(b.garrison||[]).filter(u=>!u.dead);
+  b.garrison=gar;
+  if(!gar.length)return;
+  b.cd-=dt;
+  const rng=BDEF.bunker.sight;
+  if(b.target&&(b.target.dead||b.target.inside||d2(b.pos.x,b.pos.z,b.target.pos.x,b.target.pos.z)>rng*rng))b.target=null;
+  if(!b.target){
+    b.scanT=(b.scanT||0)-dt;
+    if(b.scanT<=0){b.scanT=0.3;b.target=nearestEnemy(b.pos.x,b.pos.z,rng,b.team);}
+  }
+  if(b.target&&b.cd<=0){
+    /* fire one volley per garrisoned squad: bunkers buy range and cover, not raw damage */
+    let dmg=0,cd=0.6;
+    for(const u of gar){const w=u.def.weapon;if(!w)continue;dmg+=w.dmg*1.15;cd=Math.min(cd,w.cd);}
+    if(dmg>0){
+      b.cd=cd;
+      const fake={pos:b.pos,r:3,team:b.team,rank:0,def:{weapon:{dmg,range:rng,cd,type:'bullet'}},
+                  cat:'b',mesh:b.mesh,id:b.id};
+      fireWeapon(fake,b.target);
+    }
+  }
+}
+function v6UnitTick(u,dt){
+  const m=u.order.mode;
+  /* engineer welding a building back together */
+  if(m==='fixing'){
+    const b=u.order.tgt;
+    if(!b||b.dead||b.hp>=b.maxhp){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};u.dest=null;return true;}
+    const near=d2(u.pos.x,u.pos.z,b.pos.x,b.pos.z)<(b.def.size*0.6+2.6)**2;
+    if(!near){u.dest={x:b.pos.x,z:b.pos.z};moveUnit(u,dt);animEnt(u,dt);return true;}
+    u.dest=null;
+    const rate=u.def.repairRate*dt;
+    const cost=rate*0.28;                       // repairs are paid for, at about a quarter of build cost
+    if(G.credits[u.team]>=cost){
+      G.credits[u.team]-=cost;
+      b.hp=Math.min(b.maxhp,b.hp+rate);
+      if(b.bar)drawBar(b);
+    }
+    animEnt(u,dt);return true;
+  }
+  /* damaged unit sitting in a service depot */
+  if(m==='servicing'){
+    const dep=u.order.depot;
+    if(!dep||dep.dead||u.hp>=u.maxhp){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};u.dest=null;return true;}
+    if(d2(u.pos.x,u.pos.z,dep.pos.x,dep.pos.z)>REPAIR_R*REPAIR_R){
+      u.dest={x:dep.pos.x,z:dep.pos.z};moveUnit(u,dt);animEnt(u,dt);return true;
+    }
+    u.dest=null;
+    const rate=u.maxhp*0.16*dt, cost=rate*0.3;
+    if(G.credits[u.team]>=cost&&powerRatio(u.team)>=1){
+      G.credits[u.team]-=cost;
+      u.hp=Math.min(u.maxhp,u.hp+rate);
+      if(u.bar)drawBar(u);
+    }
+    animEnt(u,dt);return true;
+  }
+  /* infantry walking into a bunker */
+  if(m==='entering'){
+    const b=u.order.tgt;
+    const cap=BDEF.bunker.garrison;
+    if(!b||b.dead||(b.garrison||[]).length>=cap){u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};u.dest=null;return true;}
+    if(d2(u.pos.x,u.pos.z,b.pos.x,b.pos.z)>(b.def.size*0.6+1.8)**2){
+      u.dest={x:b.pos.x,z:b.pos.z};moveUnit(u,dt);animEnt(u,dt);return true;
+    }
+    b.garrison=b.garrison||[];
+    b.garrison.push(u);
+    u.inside=b;u.mesh.visible=false;u.dest=null;u.target=null;
+    u.order={mode:'garrisoned',tgt:b};
+    return true;
+  }
+  if(m==='garrisoned'){
+    const b=u.order.tgt;
+    if(!b||b.dead){u.inside=null;u.mesh.visible=true;u.order={mode:'guard',anchor:{x:u.pos.x,z:u.pos.z}};}
+    else{ u.pos.x=b.pos.x;u.pos.z=b.pos.z;
+          u.hp=Math.min(u.maxhp,u.hp+u.maxhp*0.02*dt); }  // slow mend under cover
+    return true;
+  }
+  return false;
+}
+
+/* ---------- hook into the sim ---------- */
+const _updUnit6=updateUnit;
+updateUnit=function(u,dt){
+  if(u.deployed&&u.dest)setDeployed(u,false); // told to move: pack up, keep the order
+  if(v6UnitTick(u,dt))return;
+  _updUnit6(u,dt);
+};
+const _updBld6=updateBuilding;
+updateBuilding=function(b,dt){
+  if(b.type==='bunker'){bunkerTick(b,dt);return;}
+  _updBld6(b,dt);
+};
+
+/* ---------- orders: senders ---------- */
+function orderRepair(){
+  const ids=selUnits().filter(u=>u.team===G.myTeam&&!u.def.engineer&&u.hp<u.maxhp&&depotFor(u)).map(u=>u.id);
+  if(!ids.length){sfx.deny();announce('No damaged units with a matching depot');return;}
+  announce('Returning for repairs');sfx.move();netCmd({k:'rp',ids});
+}
+function orderFix(b){
+  const ids=selUnits().filter(u=>u.team===G.myTeam&&u.def.engineer).map(u=>u.id);
+  if(!ids.length)return;
+  announce('Engineers repairing '+b.def.name);sfx.move();netCmd({k:'fx',ids,tg:b.id});
+}
+function orderGarrison(b){
+  const ids=selUnits().filter(u=>u.team===G.myTeam&&u.def.armor==='inf'&&!u.def.domain).map(u=>u.id);
+  if(!ids.length){sfx.deny();return;}
+  announce('Manning the bunker');sfx.move();netCmd({k:'gr',ids,tg:b.id});
+}
+function orderEject(b){announce('Bunker cleared');sfx.click();netCmd({k:'ej',tg:b.id});}
+function orderDig(){
+  const ids=selUnits().filter(u=>u.team===G.myTeam&&u.def.deployable).map(u=>u.id);
+  if(!ids.length)return;
+  sfx.click();netCmd({k:'dy',ids});
+}
+
+/* ---------- command bar wiring ---------- */
+CB.cRepair.onclick=()=>{
+  const sel=G.selected.filter(e=>e.cat==='u');
+  if(sel.some(u=>u.def.engineer))armCmd('fix',CB.cRepair);
+  else{orderRepair();clearPending();}
+};
+CB.cGarrison.onclick=()=>{
+  const b=G.selected.length===1&&G.selected[0].type==='bunker'?G.selected[0]:null;
+  if(b){orderEject(b);clearPending();return;}          // bunker selected -> empty it
+  armCmd('garrison',CB.cGarrison);
+};
+CB.cDig.onclick=()=>{orderDig();clearPending();};
+
+const _execPending6=execPending;
+execPending=function(cx,cy,w){
+  const cmd=G.pendingCmd;
+  if(cmd==='fix'){
+    const b=entityAt(cx,cy,G.myTeam);
+    if(b&&b.cat==='b'&&b.hp<b.maxhp)orderFix(b);
+    else{sfx.deny();announce('Select a damaged friendly building');}
+    clearPending();return;
+  }
+  if(cmd==='garrison'){
+    const b=entityAt(cx,cy,G.myTeam);
+    if(b&&b.type==='bunker')orderGarrison(b);
+    else{sfx.deny();announce('Select a bunker');}
+    clearPending();return;
+  }
+  _execPending6(cx,cy,w);
+};
+
+const _updCmdbar6=updateCmdbar;
+updateCmdbar=function(){
+  _updCmdbar6();
+  const sel=G.selected.filter(e=>!e.dead);
+  const units=sel.filter(e=>e.cat==='u');
+  const eng=units.some(u=>u.def.engineer);
+  const hurt=units.some(u=>!u.def.engineer&&u.hp<u.maxhp&&repairClass(u));
+  const inf=units.some(u=>u.def.armor==='inf'&&!u.def.domain);
+  const bunkerSel=sel.length===1&&sel[0].type==='bunker';
+  const gar=bunkerSel&&(sel[0].garrison||[]).length>0;
+  CB.cRepair.classList.toggle('off',!(eng||hurt));
+  CB.cGarrison.classList.toggle('off',!(inf||gar));
+  CB.cGarrison.querySelector('small').textContent=gar?'eject':'garrison';
+  CB.cDig.classList.toggle('off',!units.some(u=>u.def.deployable));
+  if(units.some(u=>u.def.deployable))
+    CB.cDig.querySelector('small').textContent=units.every(u=>u.deployed)?'pack up':'dig in';
+};
+
+/* ---------- role classification, used by the selection buttons ---------- */
+function uRole(u){
+  const d=u.def;
+  if(d.domain==='air')return 'air';
+  if(d.domain==='sea')return 'sea';
+  return 'land';
+}
+function isOffense(u){
+  const d=u.def;
+  if(!d.weapon)return false;          // Recon UAV, Mobile HQ, Harvester, Engineer
+  if(d.hcap||d.engineer)return false; // harvester, engineer never count as offense
+  return true;
+}
+function selectBy(pred,label){
+  const a=G.ents.filter(e=>!e.dead&&!e.inside&&e.team===G.myTeam&&e.cat==='u'&&pred(e));
+  if(!a.length){sfx.deny();announce('Nothing to select');return;}
+  setSelection(a);sfx.click();announce(label+': '+a.length);
+}
+document.getElementById('selAll').onclick=()=>selectBy(()=>true,'All units');
+document.getElementById('selOff').onclick=()=>selectBy(isOffense,'Offense');
+document.getElementById('selNav').onclick=()=>selectBy(u=>uRole(u)==='sea','Navy');
+document.getElementById('selAir').onclick=()=>selectBy(u=>uRole(u)==='air','Air');
+
 /* ---------- meshes ---------- */
+const _mkUnit0=makeUnitMesh;
+makeUnitMesh=function(type,team){
+  const N6=['engineer','mgteam','gunship','bomber','fighter'];
+  if(!N6.includes(type))return _mkUnit0(type,team);
+  const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
+  const HM=hMat(team,false),HD=hMat(team,true);
+  if(type==='engineer'){
+    g.add(box(0.62,0.78,0.42,tm,0,0.92,0));                        /* torso */
+    g.add(box(0.5,0.34,0.36,HD,0,1.5,0));                          /* head/helmet */
+    g.add(box(0.66,0.16,0.46,LAMPA,0,1.14,0.02));                  /* hi-vis band */
+    g.add(box(0.2,0.62,0.2,td,-0.42,0.9,0));g.add(box(0.2,0.62,0.2,td,0.42,0.9,0));
+    g.add(box(0.22,0.9,0.22,td,-0.17,0.42,0));g.add(box(0.22,0.9,0.22,td,0.17,0.42,0));
+    g.add(box(0.3,0.34,0.24,PIPE,0,0.98,-0.34));                   /* welding pack */
+    g.add(cyl(0.05,0.05,0.7,GUN,0.44,1.06,0.2,1.3));               /* torch */
+  }else if(type==='mgteam'){
+    g.add(box(0.64,0.76,0.44,tm,0,0.9,0));
+    g.add(box(0.5,0.32,0.36,HD,0,1.46,0));
+    g.add(box(0.22,0.62,0.22,td,-0.43,0.88,0));g.add(box(0.22,0.62,0.22,td,0.43,0.88,0));
+    g.add(box(0.22,0.88,0.22,td,-0.17,0.42,0));g.add(box(0.22,0.88,0.22,td,0.17,0.42,0));
+    const gun=new THREE.Group();
+    gun.add(cyl(0.06,0.06,1.5,GUN,0,0,0.5,1.5708));                /* barrel */
+    gun.add(box(0.26,0.2,0.5,GUN,0,-0.06,-0.06));                  /* receiver */
+    gun.add(box(0.5,0.06,0.5,td,0,-0.2,0.1));                      /* bipod plate */
+    gun.position.set(0,1.0,0.42);
+    gun.userData.isGun=true;g.add(gun);
+    g.userData.mg=gun;
+  }else if(type==='gunship'){
+    g.add(box(1.5,1.0,4.4,HM,0,2.5,0));                            /* fuselage */
+    g.add(box(1.2,0.6,1.1,winMat(),0,2.75,-1.9));                  /* canopy */
+    g.add(box(3.6,0.16,0.7,HD,0,2.4,0.1));                         /* stub wings */
+    g.add(cyl(0.1,0.1,1.0,GUN,-1.5,2.16,0.1));g.add(cyl(0.1,0.1,1.0,GUN,1.5,2.16,0.1));
+    g.add(box(0.3,0.5,2.0,HD,0,2.4,2.6));                          /* tail boom */
+    g.add(box(0.16,1.0,0.7,td,0,3.0,3.3));                         /* tail fin */
+    const rot=new THREE.Group();
+    for(let i=0;i<4;i++){const bl=box(0.18,0.05,5.4,GUN,0,0,0);bl.rotation.y=i*0.7854*2;rot.add(bl);}
+    rot.position.set(0,3.25,0);g.add(rot);g.userData.rotor=rot;
+    const trot=new THREE.Group();
+    for(let i=0;i<2;i++){const bl=box(0.06,1.5,0.12,GUN,0,0,0);bl.rotation.z=i*1.5708;trot.add(bl);}
+    trot.position.set(0.22,3.0,3.5);g.add(trot);g.userData.trotor=trot;
+    const t=new THREE.Group();
+    t.add(cyl(0.12,0.12,1.3,GUN,0,0,0.55,1.5708));
+    t.position.set(0,1.95,-1.9);g.add(t);g.userData.turret=t;
+  }else if(type==='bomber'){
+    g.add(box(1.6,1.2,7.0,HM,0,3.0,0));                            /* fuselage */
+    g.add(box(1.2,0.5,1.2,winMat(),0,3.4,-2.9));
+    g.add(box(10.5,0.2,1.9,HD,0,3.0,0.3));                         /* wing */
+    g.add(box(3.6,0.16,1.0,HD,0,3.1,3.2));                         /* tailplane */
+    g.add(box(0.18,1.2,1.0,td,0,3.7,3.3));
+    g.add(cyl(0.42,0.42,1.5,PIPE,-2.6,2.75,0.2,1.5708));           /* engines */
+    g.add(cyl(0.42,0.42,1.5,PIPE,2.6,2.75,0.2,1.5708));
+    g.add(box(1.0,0.5,2.4,GUN,0,2.35,0.4));                        /* bomb bay */
+  }else{ /* fighter */
+    g.add(box(1.1,0.9,5.6,HM,0,2.8,0));
+    g.add(box(0.9,0.5,1.2,winMat(),0,3.15,-1.6));
+    g.add(box(6.2,0.14,1.4,HD,0,2.75,0.6));                        /* delta wing */
+    g.add(box(2.2,0.12,0.8,HD,0,2.8,2.6));
+    g.add(box(0.14,1.1,0.9,td,0,3.35,2.7));                        /* fin */
+    g.add(cyl(0.34,0.4,1.1,PIPE,0,2.8,3.1,1.5708));                /* exhaust */
+    g.add(lamp(0.16,0.16,0.3,LAMPA,0,2.8,3.6));
+    g.add(cyl(0.07,0.07,1.2,GUN,-0.9,2.5,-2.2,1.5708));
+    g.add(cyl(0.07,0.07,1.2,GUN,0.9,2.5,-2.2,1.5708));
+  }
+  return g;
+};
 const _mkUnit=makeUnitMesh;
 makeUnitMesh=function(type,team){
   const N=['mobilehq','reconuav','fpvdrone','strikeuav','dogbot','droneugv','interceptor','landingcraft','coastalfrigate'];
@@ -6910,6 +7334,78 @@ makeUnitMesh=function(type,team){
     m.add(box(1.3,0.5,1.6,hazMat(),0,1.9,-1.4));                  /* VLS block */
     m.add(lamp(0.14,0.14,0.14,LAMP,0,5.1,0.9));
     return m;
+  }
+  return g;
+};
+const _mkBld0=makeBuildingMesh;
+makeBuildingMesh=function(type,team){
+  const N6=['mechbay','drydock','airhangar','dronetech','bunker'];
+  if(!N6.includes(type))return _mkBld0(type,team);
+  const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
+  const WM=wallMat(team),DM=doorMat(team),HZ=hazMat();
+  if(type==='mechbay'){
+    g.add(box(9,0.3,9,td,0,0.16,0));                               /* apron */
+    g.add(box(8,3.4,6,WM,0,1.85,-1));                              /* workshop */
+    g.add(box(8.4,0.4,6.4,td,0,3.72,-1));                          /* roof lip */
+    g.add(box(4.4,2.6,0.2,DM,0,1.5,2.05));                         /* roller door */
+    g.add(box(4.6,0.3,0.3,HZ,0,2.92,2.06));
+    for(let i=-1;i<=1;i++)g.add(box(0.5,0.3,2.6,HZ,i*2.4,0.32,3.2));/* bay markings */
+    g.add(cyl(0.16,0.16,3.4,PIPE,-3.4,3.4,1.6));                   /* gantry crane */
+    g.add(cyl(0.16,0.16,3.4,PIPE,3.4,3.4,1.6));
+    g.add(box(7.4,0.28,0.28,GUN,0,5.05,1.6));
+    g.add(box(0.6,0.7,0.5,GUN,-1.2,4.6,1.6));                      /* hoist */
+    g.add(lamp(0.24,0.16,0.1,LAMPA,-3.6,3.0,2.1));
+    g.add(lamp(0.24,0.16,0.1,LAMPA,3.6,3.0,2.1));
+  }else if(type==='drydock'){
+    g.add(box(10,0.3,7,td,0,0.16,-1.4));                           /* quay */
+    g.add(box(9.4,1.0,4.6,GUN,0,0.5,2.4));                         /* flooded basin */
+    g.add(box(9.4,0.4,0.5,td,0,1.1,4.6));                          /* dock gate */
+    g.add(box(2.6,3.0,3.4,WM,-3.4,1.7,-1.6));                      /* pump house */
+    g.add(box(2.8,0.3,3.6,td,-3.4,3.3,-1.6));
+    g.add(box(1.2,1.6,0.16,DM,-3.4,1.0,0.24));
+    for(let i=0;i<4;i++){g.add(cyl(0.18,0.18,2.2,PIPE,-4+i*2.7,1.1,3.6));}  /* keel blocks */
+    g.add(cyl(0.2,0.2,4.4,PIPE,4.2,2.2,0.6));                      /* crane mast */
+    g.add(box(0.3,0.3,4.0,GUN,4.2,4.3,2.2));
+    g.add(box(0.5,0.6,0.4,GUN,4.2,3.9,3.9));
+    g.add(lamp(0.2,0.14,0.1,LAMPA,4.2,4.5,0.7));
+  }else if(type==='airhangar'){
+    g.add(box(11,0.3,10,td,0,0.16,0));                             /* apron */
+    const arch=new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.6,9.4,16,1,true,0,Math.PI),
+      new THREE.MeshLambertMaterial({color:0x6b6478,side:THREE.DoubleSide}));
+    arch.rotation.z=Math.PI/2;arch.rotation.y=Math.PI/2;arch.position.set(0,0.3,-0.4);
+    arch.castShadow=true;g.add(arch);                              /* barrel hangar */
+    g.add(box(9.2,4.4,0.3,DM,0,2.3,4.3));                          /* hangar doors */
+    g.add(box(9.4,0.35,0.35,HZ,0,4.62,4.32));
+    g.add(box(0.3,4.4,0.3,GUN,0,2.3,4.45));                        /* door split */
+    for(let i=-1;i<=1;i++)g.add(box(0.55,0.3,3.2,HZ,i*3,0.32,6.6));/* taxiway */
+    g.add(box(1.6,1.4,1.6,WM,-5.2,0.9,3.2));                       /* control shack */
+    g.add(cyl(0.06,0.06,2.4,GUN,-5.2,2.8,3.2));
+    g.add(lamp(0.16,0.16,0.16,LAMPA,-5.2,4.05,3.2));
+  }else if(type==='dronetech'){
+    g.add(box(7,0.3,7,td,0,0.16,0));
+    g.add(box(5.6,2.8,5.0,WM,0,1.55,-0.5));                        /* workshop */
+    g.add(box(6.0,0.35,5.4,td,0,3.12,-0.5));
+    g.add(box(2.6,1.9,0.18,DM,0,1.1,2.05));
+    g.add(box(1.4,0.06,1.4,td,-1.7,3.34,-0.5));                    /* test pads */
+    g.add(box(1.4,0.06,1.4,td,1.7,3.34,-0.5));
+    g.add(box(0.9,0.14,0.9,LAMPA,-1.7,3.4,-0.5));
+    g.add(box(0.9,0.14,0.9,LAMPA,1.7,3.4,-0.5));
+    g.add(cyl(0.05,0.05,1.6,GUN,2.5,3.9,-0.5));                    /* aerials */
+    g.add(cyl(0.05,0.05,1.2,GUN,-2.5,3.7,-0.5));
+    g.add(box(1.0,0.9,0.6,PIPE,2.4,0.65,2.4));                     /* parts crate */
+  }else{ /* bunker */
+    g.add(box(6,0.3,6,td,0,0.16,0));
+    g.add(box(5.4,1.5,5.0,WM,0,0.9,0));                            /* body */
+    g.add(box(5.8,0.5,5.4,td,0,1.85,0));                           /* cap */
+    g.add(box(5.0,0.4,0.25,GUN,0,1.35,-2.5));                      /* embrasures */
+    g.add(box(0.25,0.4,4.6,GUN,-2.6,1.35,0));
+    g.add(box(0.25,0.4,4.6,GUN,2.6,1.35,0));
+    for(let i=-1;i<=1;i+=2){
+      g.add(cyl(0.09,0.09,0.7,GUN,i*1.4,1.35,-2.66,1.5708));       /* barrels poking out */
+    }
+    g.add(box(1.5,1.2,0.2,DM,0,0.75,2.55));                        /* rear hatch */
+    g.add(box(3.0,0.3,3.0,HZ,0,2.12,0));                           /* sandbag top */
+    g.add(lamp(0.18,0.12,0.08,LAMPA,-2.0,1.6,-2.55));
   }
   return g;
 };
@@ -7210,20 +7706,24 @@ buildWorld=function(){
     u.pos.x=CV.x-12+i*4;u.pos.z=CV.z-2-i*6*sgn;u.pos.y=groundH(u.pos.x,u.pos.z);
     u.dest={x:CV.x+14+i*3,z:CV.z-18*sgn+i*3*sgn};u.order={mode:'amove'};
   });
-  /* naval escort waiting off the coast */
-  const pz1=MAP.navy.p[0], pz2=MAP.navy.p[1];
-  const bgx=shoreX(pz1)+24, cgx=shoreX(pz2)+24;
-  const boat=spawnUnit('gunboat',bgx,pz1,0);boat.order={mode:'guard',anchor:{x:bgx,z:pz1}};
-  const craft=spawnUnit('landingcraft',cgx,pz2,0);craft.order={mode:'guard',anchor:{x:cgx,z:pz2}};
+  /* naval escort waiting off the coast (land maps start with no fleet) */
+  if(MAP.navy){
+    const pz1=MAP.navy.p[0], pz2=MAP.navy.p[1];
+    const bgx=shoreX(pz1)+24, cgx=shoreX(pz2)+24;
+    const boat=spawnUnit('gunboat',bgx,pz1,0);boat.order={mode:'guard',anchor:{x:bgx,z:pz1}};
+    const craft=spawnUnit('landingcraft',cgx,pz2,0);craft.order={mode:'guard',anchor:{x:cgx,z:pz2}};
+  }
   /* enemy drone tech */
   const B1=MAP.bases[1];
   spawnBuilding('dronebay',B1[0]+14,B1[1]-21,1);
   spawnBuilding('robotics',B1[0]+21,B1[1]-9,1);
   /* enemy sea patrol */
-  const ez1=MAP.navy.e[0], ez2=MAP.navy.e[1];
-  const ebx=shoreX(ez1)+26, ecx=shoreX(ez2)+30;
-  const eb=spawnUnit('gunboat',ebx,ez1,1);eb.order={mode:'guard',anchor:{x:ebx,z:ez1}};
-  const ec=spawnUnit('corvette',ecx,ez2,1);ec.order={mode:'guard',anchor:{x:ecx,z:ez2}};
+  if(MAP.navy){
+    const ez1=MAP.navy.e[0], ez2=MAP.navy.e[1];
+    const ebx=shoreX(ez1)+26, ecx=shoreX(ez2)+30;
+    const eb=spawnUnit('gunboat',ebx,ez1,1);eb.order={mode:'guard',anchor:{x:ebx,z:ez1}};
+    const ec=spawnUnit('corvette',ecx,ez2,1);ec.order={mode:'guard',anchor:{x:ecx,z:ez2}};
+  }
   /* forward camps */
   const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:c[2]}));
   camps.forEach((c,idx)=>{
