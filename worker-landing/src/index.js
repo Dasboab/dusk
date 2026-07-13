@@ -6,11 +6,14 @@ const PAGE = `<!DOCTYPE html>
 <title>Broken Meridian — free browser RTS. No install, no sign-up.</title>
 <meta name="description" content="A real-time strategy game that runs entirely in your browser. Build a base, mine auren, field armour, drones and a navy, and crush three rival factions. Free, instant, multiplayer.">
 <link rel="canonical" href="https://main.broken-meridian.com/">
+<link rel="preload" as="image" href="https://app.broken-meridian.com/assets/site/hero_soldiers.jpg">
 <meta property="og:title" content="Broken Meridian — browser RTS">
 <meta property="og:description" content="Command armour, drones and a navy in a dusk-lit warzone. Free, no install, lockstep multiplayer.">
 <meta property="og:url" content="https://main.broken-meridian.com/">
 <meta property="og:type" content="website">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://app.broken-meridian.com/assets/site/hero_soldiers.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://app.broken-meridian.com/assets/site/hero_soldiers.jpg">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%230d0a16'/><path d='M16 4v24M8 10h16M6 22h20' stroke='%23f0a24a' stroke-width='2.4'/></svg>">
 <style>
 :root{
@@ -67,18 +70,31 @@ nav .playmini{margin-left:6px;padding:8px 18px;font-size:11px;}
   border:1px solid rgba(109,79,42,.7);border-radius:2px;padding:5px 10px;background:rgba(22,14,36,.6);}
 .chip b{color:var(--amber);font-weight:700;}
 
-/* tactical console */
-.console{padding:10px;}
-.console svg{display:block;width:100%;height:auto;}
-.console .bar{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 8px;
+/* hero art */
+.heroart{padding:8px;position:relative;}
+.heroart .frame{position:relative;aspect-ratio:4/3;overflow:hidden;border:1px solid rgba(109,79,42,.8);}
+.heroart img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}
+.heroart .frame::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:linear-gradient(180deg,rgba(13,10,22,.05),rgba(13,10,22,.45) 82%),
+    repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);}
+.heroart .frame::after{content:"";position:absolute;inset:10px;z-index:2;pointer-events:none;
+  border:1px solid rgba(255,208,138,.25);}
+.heroart .bar{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 4px;
   font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted);}
-.console .bar b{color:var(--amber);}
+.heroart .bar b{color:var(--amber);}
 .dotlive{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);
   box-shadow:0 0 8px var(--teal);animation:blink 1.6s infinite;vertical-align:1px;margin-right:6px;}
 @keyframes blink{50%{opacity:.25;}}
-@keyframes sweep{to{transform:rotate(360deg);}}
-.sweep{transform-origin:300px 170px;animation:sweep 7s linear infinite;}
-@media(prefers-reduced-motion:reduce){.sweep,.dotlive{animation:none;}}
+@media(prefers-reduced-motion:reduce){.dotlive{animation:none;}}
+
+/* full-bleed banners */
+.banner{position:relative;padding:110px 0;background-size:cover;background-position:center;
+  border-top:1px solid var(--brass);border-bottom:1px solid var(--brass);}
+.banner::before{content:"";position:absolute;inset:0;
+  background:linear-gradient(90deg,rgba(13,10,22,.88),rgba(13,10,22,.35) 55%,rgba(13,10,22,.6));}
+.banner .wrap{position:relative;}
+.banner h2{font-size:clamp(26px,4vw,40px);max-width:18ch;}
+.banner p{color:var(--ink);opacity:.85;margin-top:10px;max-width:44ch;font-size:16px;}
 
 /* ticker */
 .ticker{border-top:1px solid var(--brass);border-bottom:1px solid var(--brass);
@@ -172,39 +188,9 @@ footer a:hover{color:var(--amber);}
       <span class="chip"><b>Phone</b> &amp; desktop</span>
     </div>
   </div>
-  <div class="console panel" aria-hidden="true">
-    <div class="bar"><span><span class="dotlive"></span>Tactical uplink</span><b>SECTOR 07 · DAWN CONVOY</b></div>
-    <svg viewBox="0 0 600 340" class="mono">
-      <rect width="600" height="340" fill="#0b0814"/>
-      <g stroke="rgba(240,162,74,.09)" stroke-width="1">
-        <path d="M0 68h600M0 136h600M0 204h600M0 272h600"/>
-        <path d="M100 0v340M200 0v340M300 0v340M400 0v340M500 0v340"/>
-      </g>
-      <path d="M418 0q-36 70-10 130t-6 118q-24 52 14 92" fill="none" stroke="rgba(55,224,207,.5)" stroke-width="2"/>
-      <path d="M418 0q-36 70-10 130t-6 118q-24 52 14 92L600 340V0Z" fill="rgba(55,224,207,.05)"/>
-      <g fill="none" stroke="rgba(240,162,74,.22)" stroke-width="1">
-        <ellipse cx="150" cy="120" rx="95" ry="55"/><ellipse cx="150" cy="120" rx="62" ry="34"/><ellipse cx="150" cy="120" rx="30" ry="15"/>
-        <ellipse cx="220" cy="260" rx="80" ry="42"/><ellipse cx="220" cy="260" rx="46" ry="23"/>
-      </g>
-      <g fill="rgba(55,224,207,.14)" stroke="rgba(55,224,207,.45)">
-        <ellipse cx="505" cy="90" rx="30" ry="17"/><ellipse cx="540" cy="205" rx="22" ry="13"/><ellipse cx="495" cy="295" rx="26" ry="14"/>
-      </g>
-      <path d="M300 0v340" stroke="rgba(255,208,138,.4)" stroke-width="1.4" stroke-dasharray="7 6"/>
-      <text x="308" y="18" fill="rgba(255,208,138,.6)" font-size="9" letter-spacing="2">MERIDIAN 0°</text>
-      <g class="sweep"><path d="M300 170L560 60A290 290 0 0 0 300 -120Z" fill="rgba(55,224,207,.06)"/><path d="M300 170L560 60" stroke="rgba(55,224,207,.5)" stroke-width="1.4"/></g>
-      <g fill="#f0a24a">
-        <path d="M120 118l7 7-7 7-7-7Z"/><path d="M156 132l7 7-7 7-7-7Z"/><path d="M188 108l7 7-7 7-7-7Z"/>
-        <path d="M236 252l7 7-7 7-7-7Z"/><path d="M262 274l7 7-7 7-7-7Z"/>
-      </g>
-      <g fill="none" stroke="#ff5f6b" stroke-width="1.6">
-        <path d="M448 78l12 12m0-12l-12 12"/><path d="M470 232l12 12m0-12l-12 12"/><path d="M430 300l12 12m0-12l-12 12"/>
-      </g>
-      <rect x="106" y="96" width="100" height="60" fill="none" stroke="rgba(255,208,138,.65)" stroke-width="1.2" stroke-dasharray="5 4"/>
-      <text x="106" y="90" fill="rgba(255,208,138,.7)" font-size="9" letter-spacing="2">STRIKE GROUP A</text>
-      <g fill="#9a8ab0" font-size="8" letter-spacing="2">
-        <text x="12" y="332">GRID 44-N</text><text x="522" y="332">AUREN RICH</text>
-      </g>
-    </svg>
+  <div class="heroart panel" aria-hidden="true">
+    <div class="bar"><span><span class="dotlive"></span>Field record</span><b>SECTOR 07 · DAWN CONVOY</b></div>
+    <div class="frame"><img src="https://app.broken-meridian.com/assets/site/hero_soldiers.jpg" alt="" width="1200" height="900" fetchpriority="high"></div>
   </div>
 </div></header>
 
@@ -236,6 +222,12 @@ footer a:hover{color:var(--amber);}
       <h3>Real orders</h3><p>Attack-move, patrol, guard, escort, scout, boarding and rally points, from one dockside command bar.</p></div>
   </div>
 </div></section>
+
+<div class="banner" style="background-image:url('https://app.broken-meridian.com/assets/site/band_navy.jpg')"><div class="wrap">
+  <div class="kicker">Sector report</div>
+  <h2>The sun never fully rises here.</h2>
+  <p>Perpetual dusk, contested ridges, and auren enough to bankroll a war. Someone will hold the meridian. Decide who.</p>
+</div></div>
 
 <section id="how"><div class="wrap">
   <div class="kicker">Field manual</div>
@@ -284,14 +276,14 @@ footer a:hover{color:var(--amber);}
   </div>
 </div></section>
 
-<div class="final"><div class="wrap">
+<div class="final banner" style="background-image:url('https://app.broken-meridian.com/assets/site/card_heli.jpg');border-bottom:none;"><div class="wrap">
   <h2>The ridges will not take themselves.</h2>
   <p>Free. Instant. In your browser right now.</p>
   <a class="btn primary" href="https://app.broken-meridian.com">Deploy now</a>
 </div></div>
 
 <footer><div class="wrap">
-  <span>Broken Meridian &copy; 2026</span>
+  <span>Broken Meridian &copy; 2026 &nbsp;&middot;&nbsp; Photography: US DoD, public domain. DoD imagery does not imply endorsement.</span>
   <span><a href="https://app.broken-meridian.com">Play</a> &nbsp;&middot;&nbsp; <a href="#faq">FAQ</a></span>
 </div></footer>
 

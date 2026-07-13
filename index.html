@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Broken Meridian">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -44,7 +44,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .tbtn.arm{color:#0d0a16;background:var(--amber);border-color:var(--amber);}
 
 /* bottom dock */
-#dock{position:fixed;left:196px;right:10px;bottom:10px;z-index:28;display:flex;align-items:stretch;height:92px;}
+#dock{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:28;
+  display:flex;align-items:stretch;height:118px;}
 #dockTabs{display:flex;flex-direction:column;flex:0 0 86px;border-right:1px solid #6d4f2a;}
 #dockTabs button{flex:1;display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--muted);
   padding:0 9px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;cursor:pointer;
@@ -56,7 +57,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 #dockTabs button:disabled{opacity:.35;cursor:default;}
 #dockTabs button b{position:absolute;right:5px;top:3px;font-size:9px;color:var(--teal);font-weight:700;font-variant-numeric:tabular-nums;}
 #dockViews{flex:1;display:flex;min-width:0;}
-.dview{display:none;flex:1;align-items:stretch;gap:6px;padding:7px 9px;overflow-x:auto;overflow-y:hidden;min-width:0;scrollbar-width:thin;scrollbar-color:#6d4f2a transparent;}
+.dview{display:none;flex:1;align-items:stretch;gap:6px;padding:7px 9px;overflow-x:auto;overflow-y:hidden;min-width:0;scrollbar-width:thin;scrollbar-color:#6d4f2a transparent;touch-action:pan-x;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
 .dview.on{display:flex;}
 .dview::-webkit-scrollbar{height:6px;}
 .dview::-webkit-scrollbar-thumb{background:#6d4f2a;border-radius:3px;}
@@ -65,7 +66,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .dgroup>i{writing-mode:vertical-rl;transform:rotate(180deg);font-style:normal;font-size:8px;letter-spacing:.2em;
   text-transform:uppercase;color:var(--muted);text-align:center;flex:0 0 12px;align-self:center;}
 .bgrid{display:flex;gap:6px;align-items:stretch;flex:0 0 auto;}
-.bbtn{position:relative;flex:0 0 150px;width:150px;border:1px solid rgba(255,180,84,.3);background:rgba(30,22,44,.7);
+.bbtn{position:relative;flex:0 0 156px;width:156px;border:1px solid rgba(255,180,84,.3);background:rgba(30,22,44,.7);
   color:var(--ink);cursor:pointer;padding:6px 8px 5px;text-align:left;overflow:hidden;}
 .bbtn:hover:not(.locked){border-color:var(--amber);background:rgba(52,36,66,.8);}
 .bbtn .nm{font-size:11px;font-weight:600;line-height:1.15;display:block;position:relative;z-index:2;}
@@ -83,8 +84,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 #selchip .snm{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;}
 #selchip .shp{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;}
 #selchip .slv{color:var(--amber);}
-.cbtn{flex:0 0 54px;width:54px;background:rgba(30,22,44,.85);border:1px solid var(--amber-dim);color:var(--ink);
-  cursor:pointer;font-size:9px;font-weight:700;letter-spacing:.05em;padding:4px 0 3px;line-height:1.2;}
+.cbtn{flex:0 0 56px;width:56px;background:rgba(30,22,44,.85);border:1px solid var(--amber-dim);color:var(--ink);
+  cursor:pointer;font-size:9px;font-weight:700;letter-spacing:.05em;padding:4px 0 3px;line-height:1.2;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
 .cbtn .cico{display:block;font-size:19px;line-height:1.25;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));}
 .cbtn small{display:block;font-size:8px;color:var(--muted);font-weight:400;letter-spacing:.08em;}
 .cbtn:hover{border-color:var(--amber);}
@@ -130,14 +132,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 .ptile:hover{border-color:var(--amber);}
 
 /* minimap */
-#mmwrap{position:fixed;left:10px;bottom:10px;z-index:25;padding:4px;}
-#minimap{display:block;width:150px;height:150px;background:#0b0815;cursor:crosshair;}
+#mmwrap{flex:0 0 auto;display:flex;align-items:center;padding:6px;border-right:1px solid #6d4f2a;}
+#minimap{display:block;width:102px;height:102px;background:#0b0815;cursor:crosshair;border:1px solid rgba(109,79,42,.6);}
 
 #dragbox{position:fixed;border:1px solid var(--teal);background:rgba(55,224,207,.08);z-index:40;display:none;pointer-events:none;}
 #msg{position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:35;pointer-events:none;text-align:center;width:90vw;}
 .msgline{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);
   text-shadow:0 0 10px rgba(0,0,0,.9);margin-bottom:5px;transition:opacity 1s;}
-#placehint{position:fixed;bottom:112px;left:50%;transform:translateX(-50%);z-index:35;padding:6px 12px;
+#placehint{position:fixed;bottom:calc(140px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:35;padding:6px 12px;
   font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);display:none;text-align:center;}
 
 /* overlays */
@@ -160,14 +162,27 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 @media (max-width:760px){
   #logo{display:none;}
   #clock{display:none;}
-  #minimap{width:110px;height:110px;}
-  #mmwrap{bottom:100px;}
-  #dock{left:8px;right:8px;bottom:8px;height:84px;}
-  #dockTabs{flex:0 0 64px;}
+  #dock{left:0;right:0;bottom:0;height:calc(112px + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);border-left:none;border-right:none;border-bottom:none;border-radius:0;}
+  #mmwrap{padding:5px;}
+  #minimap{width:100px;height:100px;}
+  #dockTabs{flex:0 0 48px;}
   #dockTabs button span{display:none;}
-  #dockTabs button{justify-content:center;}
-  #dockTabs button svg{width:18px;height:18px;flex:0 0 18px;}
-  .cbtn{flex:0 0 52px;width:52px;}
+  #dockTabs button{justify-content:center;padding:0;}
+  #dockTabs button svg{width:20px;height:20px;flex:0 0 20px;}
+  #dockTabs button b{right:4px;top:5px;}
+  .dview{padding:8px;gap:7px;}
+  .bbtn{flex:0 0 146px;width:146px;}
+  /* squad view: two-row icon grid */
+  #cmdbar.on{display:grid;grid-auto-flow:column;grid-template-rows:1fr 1fr;grid-auto-columns:56px;
+    gap:5px;align-items:stretch;padding:6px 8px;}
+  #cmdbar .cbtn{width:auto;flex:none;min-height:0;padding:2px 0;}
+  #cmdbar .cbtn .cico,#cmdbar .cbtn svg.cico{width:17px;height:17px;margin:0 auto;}
+  #cmdbar .cbtn small{font-size:7px;letter-spacing:.04em;}
+  #selchip{grid-row:1/3;min-width:84px;max-width:96px;padding:3px 6px;overflow:hidden;}
+  #selchip .pgrid{max-width:88px;}
+  #selchip .ptile{width:24px;height:24px;}
+  #selchip .ptile.big{width:30px;height:30px;}
   .cbtn .cico{font-size:21px;}
 }
 </style>
@@ -196,6 +211,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
 </div>
 
 <div id="dock" class="panel">
+ <div id="mmwrap"><canvas id="minimap" width="168" height="168"></canvas></div>
  <div id="dockTabs">
   <button id="dtCmd" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/></svg><span>Squad</span><b id="dtCount"></b></button>
   <button id="dtBuild" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M6 20V9l6-4.5L18 9v11"/><path d="M10 20v-5h4v5"/></svg><span>Build</span></button>
@@ -227,7 +243,6 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
  </div>
 </div>
 
-<div id="mmwrap" class="panel"><canvas id="minimap" width="168" height="168"></canvas></div>
 <div id="dragbox"></div>
 <div id="msg"></div>
 <div id="placehint" class="panel">Tap to place structure. Cancel: Esc or right click.</div>
@@ -3913,7 +3928,7 @@ let WSX = 0, WSZ = 0;              // world seed offsets (server-driven in multi
   if(s){ WSX = (s%1013)*0.137 + 11; WSZ = ((Math.floor(s/1013))%1013)*0.191 + 7; } })();
 const TSIZE = 2*HALF+60;           // terrain plane size
 const GRID = 2;
-const TEAM_COL = [0x4169e1, 0xff5148, 0x8bc34a, 0xb64df0];
+const TEAM_COL = [0x4169e1, 0xff5148, 0xe8e6ee, 0xb64df0];
 
 const MULT = {
   bullet:{inf:1.00, veh:0.25, bld:0.18},
@@ -4592,7 +4607,7 @@ function updateFog(){
   fogTex.needsUpdate=true;
   /* apply visibility to enemies + ore, sighting announce */
   for(const e of G.ents){
-    if(e.team!==1||e.dead) continue;
+    if(e.team===G.myTeam||e.dead) continue;
     const v=fog.visible[cellIdx(e.pos.x,e.pos.z)]===1;
     e.mesh.visible=v;
     if(v && !e.seen){
@@ -4629,7 +4644,7 @@ function entityAt(cx,cy,teamFilter){
   for(const e of G.ents){
     if(e.dead) continue;
     if(teamFilter!==undefined && e.team!==teamFilter) continue;
-    if(e.team!==0 && !e.mesh.visible) continue;
+    if(e.team!==G.myTeam && !e.mesh.visible) continue;
     const sp=screenPos(e.pos,tmpV);
     if(sp.z>1) continue;
     const px=Math.max(18,(e.cat==='b'?e.def.size*2.2:e.def.r*7)*(70/cam.dist)*10);
@@ -6508,8 +6523,8 @@ function drawMinimap(){
   for(const o of G.ore)if(o.amount>0&&fog.explored[cellIdx(o.x,o.z)])mmCtx.fillRect(mx(o.x)-1,mz(o.z)-1,2,2);
   for(const e of G.ents){
     if(e.dead)continue;
-    if(e.team!==0&&!fog.visible[cellIdx(e.pos.x,e.pos.z)])continue;
-    mmCtx.fillStyle=e.team===G.myTeam?'#37e0cf':'#ff5148';
+    if(e.team!==G.myTeam&&!fog.visible[cellIdx(e.pos.x,e.pos.z)])continue;
+    mmCtx.fillStyle=e.team===G.myTeam?'#37e0cf':teamHex(e.team);
     const s=e.cat==='b'?4:2.5;
     mmCtx.fillRect(mx(e.pos.x)-s/2,mz(e.pos.z)-s/2,s,s);
   }
