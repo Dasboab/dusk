@@ -59,6 +59,16 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   .tbtn{padding:6px 5px;letter-spacing:0;font-size:9px;}
 }
 
+/* perf hud */
+#perf{position:fixed;top:50px;right:8px;z-index:36;display:none;padding:7px 9px;border-radius:3px;
+  background:rgba(9,7,17,.9);border:1px solid var(--brass);color:var(--ink);
+  font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;
+  pointer-events:none;min-width:132px;}
+#perf.on{display:block;}
+#perf b{color:var(--amber);font-weight:700;}
+#perf .warn{color:#ff5148;}
+#perf .ok{color:var(--teal);}
+
 /* map picker */
 #mapsel{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:14px 0 4px;text-align:left;}
 .mcard{position:relative;border:1px solid rgba(109,79,42,.8);border-radius:3px;padding:9px 10px 8px;
@@ -280,6 +290,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
  </div>
 </div>
 
+<div id="perf"></div>
 <div id="dragbox"></div>
 <div id="msg"></div>
 <div id="placehint" class="panel">Tap to place structure. Cancel: Esc or right click.</div>
@@ -6827,6 +6838,7 @@ let lastT=performance.now(),fogT=0,mmT=0,uiT=0;
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.05,(now-lastT)/1000);lastT=now;
+  const _ps=performance.now();
   if(waterTick)waterTick(now/1000);
   if(fogU)fogU.uT.value=now/1000;
   if(G.running&&!G.over){
@@ -6858,7 +6870,9 @@ function frame(now){
       camera.position.y+=vrand(-1,1)*shake.amp*shake.t;
     }
   }
+  if(window.__perfSim!==undefined)window.__perfSim=performance.now()-_ps;
   renderer.render(scene,camera);
+  if(window.__perfFrame)window.__perfFrame();
 }
 requestAnimationFrame(frame);
 
@@ -8185,6 +8199,42 @@ function endGame(win){
   bl.textContent=MAP.blurb;
   const sub=document.querySelector('#overlay .sub');
   if(sub)sub.textContent='Operation '+MAP.name+' \u00b7 v0.5';
+})();
+
+/* ---------- perf HUD: real numbers from the real device ---------- */
+(function(){
+  const el=document.getElementById('perf');
+  let on=false, frames=0, acc=0, simAcc=0, worst=0, last=performance.now();
+  window.__perfSim=0;
+  function toggle(){on=!on;el.classList.toggle('on',on);announce(on?'Perf overlay on':'Perf overlay off');}
+  addEventListener('keydown',e=>{if(e.key==='p'||e.key==='P')toggle();});
+  const clock=document.getElementById('clock');
+  if(clock){clock.style.cursor='pointer';clock.style.pointerEvents='auto';
+    clock.addEventListener('click',toggle);
+    clock.addEventListener('touchend',e=>{e.preventDefault();toggle();},{passive:false});}
+  const logo=document.getElementById('logo');
+  if(logo){logo.style.cursor='pointer';logo.addEventListener('click',toggle);}
+  window.__perfFrame=function(){
+    const now=performance.now(), dt=now-last; last=now;
+    frames++; acc+=dt; if(dt>worst)worst=dt;
+    if(acc>=500){
+      const fps=frames/(acc/1000);
+      const ms=acc/frames;
+      const ri=renderer.info.render;
+      const cls=v=>v>=55?'ok':(v<30?'warn':'');
+      if(on)el.innerHTML=
+        '<b>'+fps.toFixed(0)+'</b> fps <span class="'+cls(fps)+'">'+ms.toFixed(1)+'ms</span><br>'+
+        'worst  <b>'+worst.toFixed(0)+'</b>ms<br>'+
+        'sim    <b>'+(simAcc/frames).toFixed(2)+'</b>ms<br>'+
+        'tris   <b>'+(ri.triangles/1000).toFixed(0)+'</b>k<br>'+
+        'draws  <b>'+ri.calls+'</b><br>'+
+        'ents   <b>'+G.ents.filter(e=>!e.dead).length+'</b><br>'+
+        'gl     <b>webgl2</b> r'+THREE.REVISION+'<br>'+
+        'gpu    <b>'+(navigator.gpu?'webgpu avail':'webgl only')+'</b>';
+      frames=0;acc=0;simAcc=0;worst=0;
+    }
+    simAcc+=window.__perfSim; window.__perfSim=0;
+  };
 })();
 
 let built=false;
