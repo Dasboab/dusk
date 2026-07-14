@@ -275,6 +275,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0d0a16;color:var(--in
   <button class="cbtn" id="cDeploy"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v7M9.4 6.4L12 9l2.6-2.6"/><path d="M5 12.5h14V20H5z"/><path d="M9 20v-4h6v4"/></svg><small>deploy</small></button>
   <button class="cbtn" id="cSquad"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.1"/><path d="M4 20c0-3.4 2.2-5.6 5-5.6s5 2.2 5 5.6"/><circle cx="16.5" cy="9" r="2.4"/><path d="M15.5 20c.3-2.8 1.9-4.6 4-4.6 1 0 1.9.4 2.5 1"/></svg><small>cohort</small></button>
   <button class="cbtn" id="cType"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14.5a4 4 0 0 1 0-5.6l3-3a4 4 0 0 1 5.6 5.6L17 13"/><path d="M14 9.5a4 4 0 0 1 0 5.6l-3 3a4 4 0 0 1-5.6-5.6L7 11"/></svg><small>same type</small></button>
+  <button class="cbtn" id="cStrike"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c2.2 2.6 3.2 5.6 3.2 9 0 3-1 5.8-3.2 8.4C9.8 16.8 8.8 14 8.8 11c0-3.4 1-6.4 3.2-9z"/><path d="M8.8 13L6 16v3l2.8-1.6M15.2 13L18 16v3l-2.8-1.6"/></svg><small>strike</small></button>
   <button class="cbtn" id="cRepair"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a3.6 3.6 0 0 0 4.8 4.6l-8.4 8.4a2.2 2.2 0 0 1-3.1-3.1l8.4-8.4a3.6 3.6 0 0 0-1.7-1.5z"/><path d="M5 5l3.5 3.5"/></svg><small>repair</small></button>
   <button class="cbtn" id="cGarrison"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10l8-5 8 5v9"/><path d="M8 19v-4h8v4"/><path d="M8 11h3"/></svg><small>garrison</small></button>
   <button class="cbtn" id="cDig"><svg class="cico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16"/><path d="M6 18v-3.5A3.5 3.5 0 0 1 9.5 11H14"/><path d="M13 8.5l6 2.5"/><circle cx="8" cy="15.5" r="1.4"/></svg><small>dig in</small></button>
@@ -4091,11 +4092,39 @@ const GRID = 2;
 const TEAM_COL = [0x4169e1, 0xff5148, 0xe8e6ee, 0xb64df0];
 const COL_NAME = ['BLUE','RED','BONE','VIOLET'];
 
+/* Armour classes: inf (soft), veh (armoured ground), ship (hull), air (airframe), bld.
+   A weapon's ENVELOPE says what it can physically engage; the multiplier says how well.
+   A tank gun cannot track a drone at all, so it simply has no air envelope. */
 const MULT = {
-  bullet:{inf:1.00, veh:0.25, bld:0.18},
-  rocket:{inf:0.55, veh:1.25, bld:1.00},
-  shell :{inf:0.60, veh:1.00, bld:0.85}
+  bullet:{inf:1.00, veh:0.25, ship:0.10, air:0.20, bld:0.18},   /* small arms */
+  shell :{inf:0.60, veh:1.00, ship:0.90, air:0.00, bld:0.85},   /* direct-fire gun: no AA capability */
+  arty  :{inf:1.05, veh:0.70, ship:0.55, air:0.00, bld:1.15},   /* indirect fire: cannot engage air */
+  rocket:{inf:0.55, veh:1.25, ship:1.00, air:0.35, bld:1.00},   /* ATGM: can loft at a slow low target */
+  flak  :{inf:0.25, veh:0.10, ship:0.08, air:1.60, bld:0.05},   /* dedicated AAA */
+  sam   :{inf:0.05, veh:0.05, ship:0.05, air:2.40, bld:0.05},   /* surface-to-air missile */
+  naval :{inf:0.55, veh:0.85, ship:1.30, air:0.00, bld:0.95},   /* ship gun */
+  ballistic:{inf:1.40, veh:1.30, ship:1.20, air:0.00, bld:1.60} /* the big stick */
 };
+/* what each weapon type is even allowed to shoot at */
+const ENVELOPE = {
+  bullet:{ground:true, air:true},      /* can spray at a low drone, badly */
+  shell :{ground:true, air:false},
+  arty  :{ground:true, air:false},
+  rocket:{ground:true, air:true},      /* Javelin does both, as asked */
+  flak  :{ground:true, air:true},
+  sam   :{ground:false, air:true},
+  naval :{ground:true, air:false},
+  ballistic:{ground:true, air:false}
+};
+const isAirEnt = e => e.def && e.def.domain==='air';
+function wpnOf(u){return (u.deployed&&u.def.deployed)?u.def.deployed:u.def.weapon;}
+function canEngage(u,t){
+  const w=wpnOf(u);
+  if(!w)return false;
+  const env=ENVELOPE[w.type]||{ground:true,air:true};
+  if(isAirEnt(t))return !!env.air && MULT[w.type].air>0;
+  return !!env.ground;
+}
 
 const BDEF = {
   conyard  :{name:'Construction Yard', cost:0,    time:0,  hp:3000, power:20,  size:9,  sight:26, prereq:null},
@@ -4124,7 +4153,7 @@ const UDEF = {
              blurb:'Twin 130mm assault', weapon:{dmg:70, range:21, cd:2.4, type:'shell'}},
   mlrs     :{name:'MLRS Rainmaker',   cost:1600, time:14, hp:300, speed:8.5,  r:2.2, sight:18, armor:'veh', from:'factory',
              blurb:'Long range rocket artillery',
-             weapon:{dmg:38, range:34, minRange:10, cd:6, type:'rocket', burst:4, spread:3.5, arc:true, aoe:3.6}},
+             weapon:{dmg:38, range:34, minRange:10, cd:6, type:'arty', burst:4, spread:3.5, arc:true, aoe:3.6}},
   gunboat  :{name:'Gunboat Piranha',  cost:600,  time:8,  hp:320, speed:15.0, r:2.2, sight:26, armor:'veh', from:'navalyard',
              domain:'sea', blurb:'Fast coastal autocannon', weapon:{dmg:11, range:16, cd:0.4, type:'bullet'}},
   corvette :{name:'Missile Corvette', cost:1400, time:14, hp:700, speed:10.0, r:2.8, sight:28, armor:'veh', from:'navalyard',
@@ -5064,7 +5093,7 @@ mmCanvas.addEventListener('pointerdown',e=>{e.preventDefault();mmNav(e);
 /* ============================ COMMAND BAR ============================ */
 const cmdbar=document.getElementById('cmdbar');
 const CB={};
-for(const id of['cAttack','cPatrol','cGuard','cProtect','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel','cRepair','cGarrison','cDig'])
+for(const id of['cAttack','cPatrol','cGuard','cProtect','cScout','cBoard','cUnload','cRally','cSquad','cType','cStop','cDesel','cRepair','cGarrison','cDig','cStrike'])
   CB[id]=document.getElementById(id);
 function clearPending(){G.pendingCmd=null;for(const k in CB)CB[k].classList.remove('arm');}
 function armCmd(cmd,btn){
@@ -5821,12 +5850,25 @@ function execCmd(team,c){
     case 'gr':{const b=entById(c.tg);if(b&&!b.dead&&b.type==='bunker'&&b.team===team)_ordGarrison(cmdUnits(team,c),b);break;}
     case 'ej':{const b=entById(c.tg);if(b&&!b.dead&&b.type==='bunker'&&b.team===team)_ordEject(b);break;}
     case 'dy':_ordDeploy(cmdUnits(team,c));break;
+    case 'ms':_launchMissile(team,c.x,c.z);break;
   }
 }
 /* ---- senders (local UI, sfx feedback) ---- */
 function smartOrder(w){const ids=selIds();if(!ids.length)return;sfx.move();netCmd({k:'o',op:'sm',ids,x:w.x,z:w.z});}
 function orderAMove(w){const ids=selIds();if(!ids.length)return;sfx.move();netCmd({k:'o',op:'am',ids,x:w.x,z:w.z});}
-function orderAttack(t){const ids=selIds();if(!ids.length)return;sfx.attack();netCmd({k:'o',op:'at',ids,tg:t.id});}
+function orderAttack(t){
+  const sel=selUnits();
+  const able=sel.filter(u=>canEngage(u,t));
+  if(!able.length){
+    sfx.deny();
+    announce(t.def&&t.def.domain==='air'
+      ? 'These units have no air defence capability'
+      : 'These units cannot engage that');
+    return;
+  }
+  if(able.length<sel.length)announce(able.length+' of '+sel.length+' can engage');
+  sfx.attack();netCmd({k:'o',op:'at',ids:able.map(u=>u.id),tg:t.id});
+}
 function orderPatrol(w){const ids=selIds();if(!ids.length)return;announce('Patrol route set');sfx.move();netCmd({k:'o',op:'pt',ids,x:w.x,z:w.z});}
 function orderGuard(w){const ids=selIds();if(!ids.length)return;announce('Holding position');sfx.move();netCmd({k:'o',op:'gd',ids,x:w.x,z:w.z});}
 function orderScout(){const ids=selIds();if(!ids.length)return;announce('Scouting the dark');sfx.move();netCmd({k:'o',op:'sc',ids});}
@@ -5968,7 +6010,7 @@ function nearestEnemy(cx,cz,r,team,filt){
   return best;
 }
 const isAir=e=>e.def.domain==='air';
-function acqFilter(u){return (u.def.weapon&&u.def.weapon.airOnly)?isAir:null;}
+function acqFilter(u){return t=>canEngage(u,t);}
 function muzzleY(u){
   if(u.cat==='b')return u.pos.y+2.6;
   return u.pos.y+(u.type==='heavy'?2.3:u.type==='tank'?1.9:u.type==='apc'?2.1:u.type==='mlrs'?2.6:u.type==='corvette'?2.6:u.type==='gunboat'?1.8:u.type==='harvester'?1.4:1.2);
@@ -6054,10 +6096,18 @@ function impact(p,radius,edgeFrac){
     }
   }
 }
+function armourOf(t){
+  if(t.cat==='b')return 'bld';
+  if(t.def.domain==='air')return 'air';
+  if(t.def.domain==='sea')return 'ship';
+  return t.def.armor;
+}
 function applyDamage(t,raw,wtype,attacker){
   if(t.dead)return;
-  const cat=t.cat==='b'?'bld':t.def.armor;
-  let dmg=raw*(MULT[wtype]?MULT[wtype][cat]:1);
+  const cat=armourOf(t);
+  const m=MULT[wtype]?MULT[wtype][cat]:1;
+  if(m<=0)return;                                  /* physically cannot hurt it */
+  let dmg=raw*m;
   if(attacker&&attacker.rank)dmg*=1+attacker.rank*0.15;
   t.hp-=dmg;drawBar(t);
   if(t.team>=1&&G.ais[t.team-1]){
@@ -6191,6 +6241,7 @@ function aimTurret(u,t,dt){
 }
 function engage(u,dt){
   const t=u.target,w=(u.deployed&&u.def.deployed)?u.def.deployed:u.def.weapon;
+  if(!canEngage(u,t)){u.target=null;return;}   /* a tank cannot track an aircraft */
   const dist=Math.hypot(t.pos.x-u.pos.x,t.pos.z-u.pos.z);
   if(u.deployed){                       // dug in: never chases, just traverses and fires
     if(dist<=w.range){u.dest=null;aimTurret(u,t,dt);
@@ -6938,7 +6989,7 @@ UDEF.droneugv ={name:'Drone Tank',      cost:1100, time:12, hp:520, speed:11.0, 
                 weapon:{dmg:34, range:18, cd:1.6, type:'shell'}};
 UDEF.interceptor={name:'Counter UAS Team',cost:450, time:7, hp:120, speed:8.6, r:0.9, sight:26, armor:'inf', from:'ewcenter',
                 blurb:'Jammer rifles shred drones',
-                weapon:{dmg:22, range:24, cd:0.5, type:'bullet'}};
+                weapon:{dmg:40, range:22, cd:0.5, type:'sam'}};
 UDEF.landingcraft={name:'Landing Craft', cost:900, time:10, hp:520, speed:11.5, r:2.7, sight:24, armor:'veh', from:'navalyard',
                 domain:'sea', blurb:'Carries 8, beach to unload', cap:8,
                 weapon:{dmg:6, range:12, cd:0.6, type:'bullet'}};
@@ -6965,7 +7016,16 @@ BDEF.bunker   ={name:'Bunker',           cost:450,  time:7,  hp:1800, power:-5, 
 /* deep naval tech: Naval Yard -> Dry Dock -> Fleet Command, the gate on the sea MCV */
 BDEF.fleetcmd ={name:'Fleet Command',    cost:2200, time:26, hp:1600, power:-40, size:12, sight:26, prereq:'drydock',
                 blurb:'Unlocks the amphibious MCV and heavy hulls'};
-BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','fleetcmd','airhangar','dronetech','bunker');
+BDEF.samsite  ={name:'SAM Site',         cost:850,  time:10, hp:700,  power:-25, size:7,  sight:34, prereq:'ewcenter',
+                blurb:'Static air defence. Cannot touch ground',
+                weapon:{dmg:60, range:34, cd:1.4, type:'sam'}};
+BDEF.irondome ={name:'Iron Dome',        cost:2600, time:28, hp:1200, power:-60, size:9,  sight:30, prereq:'samsite',
+                blurb:'Shoots incoming shells and missiles out of the sky',
+                intercept:{range:42, cd:0.55}};
+BDEF.silo     ={name:'Missile Silo',     cost:5000, time:60, hp:1800, power:-100, size:11, sight:22, prereq:'fleetcmd',
+                blurb:'Ballistic missile. Six minute reload. Ends arguments',
+                strike:{dmg:900, aoe:26, charge:360}};
+BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','fleetcmd','airhangar','dronetech','bunker','samsite','irondome','silo');
 
 /* which depot repairs a given unit */
 function repairClass(u){
@@ -7002,11 +7062,11 @@ UDEF.scoutcar ={name:'Scout Car Whippet', cost:450, time:6, hp:220, speed:19.0, 
                 blurb:'Fast eyes, light gun, dies to anything real',
                 weapon:{dmg:9, range:12, cd:0.45, type:'bullet'}};
 UDEF.aatrack  ={name:'AA Track Hailstorm', cost:900, time:10, hp:420, speed:11.5, r:1.5, sight:26, armor:'veh', from:'factory',
-                blurb:'Flak: shreds aircraft, cannot hit ground',
-                weapon:{dmg:26, range:22, cd:0.5, type:'bullet', airOnly:true}};
+                blurb:'Flak. Tears aircraft apart, near-useless on the ground',
+                weapon:{dmg:30, range:24, cd:0.45, type:'flak'}};
 UDEF.artillery={name:'Artillery Basilisk', cost:1600, time:16, hp:340, speed:6.2, r:1.7, sight:20, armor:'veh', from:'factory',
                 blurb:'Outranges everything, helpless up close',
-                weapon:{dmg:95, range:38, minRange:12, cd:5.5, type:'shell', aoe:8}};
+                weapon:{dmg:95, range:38, minRange:12, cd:5.5, type:'arty', aoe:8}};
 UDEF.flametank={name:'Flame Tank Pyre',   cost:1100, time:12, hp:700, speed:10.5, r:1.6, sight:16, armor:'veh', from:'factory',
                 blurb:'Burns infantry and bunkers out of cover',
                 weapon:{dmg:34, range:9, cd:0.7, type:'bullet', aoe:4}};
@@ -7018,6 +7078,17 @@ UDEF.stealth  ={name:'Stealth Wraith',    cost:2400, time:22, hp:240, speed:26.0
 UDEF.heavylift={name:'Heavy Lifter Ox',   cost:1200, time:13, hp:420, speed:15.0, r:2.4, sight:22, armor:'veh', from:'airhangar',
                 domain:'air', cap:5, blurb:'Flies five infantry over anything'};
 
+/* --- dedicated air defence --- */
+UDEF.aadestroyer={name:'AA Destroyer Aegis', cost:1900, time:18, hp:900, speed:9.5, r:3.0, sight:34, armor:'veh', from:'navalyard',
+                domain:'sea', blurb:'Fleet air cover: SAMs, blind to surface targets',
+                weapon:{dmg:52, range:32, cd:1.1, type:'sam'}};
+
+/* --- field artillery: a towed gun with an infantry crew --- */
+UDEF.fieldgun ={name:'Field Gun Ordnance', cost:600, time:8, hp:200, speed:6.0, r:1.1, sight:14, armor:'inf', from:'barracks',
+                blurb:'Tows into position, then out-ranges armour', deployable:true,
+                weapon:{dmg:18, range:9, cd:1.6, type:'shell'},
+                deployed:{dmg:75, range:32, minRange:8, cd:3.4, type:'arty', aoe:6}};
+
 UDEF.gunship  ={name:'Gunship Hydra',   cost:1500, time:15, hp:300, speed:17.0, r:2.0, sight:28, armor:'veh', from:'airfield',
                 domain:'air', blurb:'Rotary cannon, shreds ground',
                 weapon:{dmg:15, range:17, cd:0.28, type:'bullet'}};
@@ -7026,11 +7097,12 @@ UDEF.bomber   ={name:'Bomber Kestrel',  cost:2000, time:19, hp:260, speed:22.0, 
                 weapon:{dmg:120, range:6, cd:7.0, type:'shell', aoe:7}};
 UDEF.fighter  ={name:'Fighter Talon',   cost:1400, time:14, hp:220, speed:30.0, r:1.7, sight:32, armor:'veh', from:'airfield',
                 domain:'air', blurb:'Air superiority: hunts other aircraft',
-                weapon:{dmg:30, range:20, cd:0.9, type:'bullet', airOnly:true}};
+                weapon:{dmg:34, range:22, cd:0.9, type:'sam'}};
 
 INF_ORDER.push('engineer','medic','mgteam');
 VEH_ORDER.push('scoutcar','aatrack','flametank','artillery','gunship','bomber','fighter','stealth','heavylift');
-NAV_ORDER.push('seamcv');
+NAV_ORDER.push('aadestroyer','seamcv');
+INF_ORDER.push('fieldgun');
 G.queues.fleetcmd=[];
 G.queues.mechbay=[];G.queues.drydock=[];G.queues.airhangar=[];G.queues.dronetech=[];G.queues.bunker=[];
 
@@ -7063,6 +7135,83 @@ function seaSpawn(z0){
     }
   }
   return best;
+}
+
+/* ---------- Iron Dome: swat incoming ordnance out of the air ---------- */
+function ironDomeTick(dt){
+  const domes=G.ents.filter(e=>!e.dead&&e.cat==='b'&&e.type==='irondome');
+  if(!domes.length)return;
+  for(const d of domes){
+    d.icd=(d.icd||0)-dt;
+    if(d.icd>0)continue;
+    if(powerRatio(d.team)<1)continue;             /* brownout: the dome goes dark */
+    const cfg=BDEF.irondome.intercept;
+    for(let i=G.projectiles.length-1;i>=0;i--){
+      const p=G.projectiles[i];
+      if(!p.owner||p.owner.team===d.team)continue; /* never shoot down your own */
+      if(p.intercepted)continue;
+      const px=p.mesh.position.x, pz=p.mesh.position.z;
+      if(d2(px,pz,d.pos.x,d.pos.z)>cfg.range*cfg.range)continue;
+      /* kill it in flight */
+      p.intercepted=true;
+      explosion(new THREE.Vector3(px,p.mesh.position.y,pz),0.7);
+      scene.remove(p.mesh);
+      G.projectiles.splice(i,1);
+      d.icd=cfg.cd;
+      if(d.team===G.myTeam)mmPing(px,pz,'#37e0cf');
+      break;
+    }
+  }
+}
+
+/* ---------- static SAM sites fire like turrets, but only upward ---------- */
+function samTick(b,dt){
+  const w=BDEF.samsite.weapon;
+  b.cd-=dt;
+  if(powerRatio(b.team)<1)return;
+  if(b.target&&(b.target.dead||!isAirEnt(b.target)||
+     d2(b.pos.x,b.pos.z,b.target.pos.x,b.target.pos.z)>w.range*w.range))b.target=null;
+  if(!b.target){
+    b.scanT=(b.scanT||0)-dt;
+    if(b.scanT<=0){b.scanT=0.3;b.target=nearestEnemy(b.pos.x,b.pos.z,w.range,b.team,isAirEnt);}
+  }
+  if(b.target&&b.cd<=0){
+    b.cd=w.cd;
+    const fake={pos:b.pos,r:3,team:b.team,rank:0,def:{weapon:w},cat:'b',mesh:b.mesh,id:b.id};
+    fireWeapon(fake,b.target);
+  }
+}
+
+/* ---------- ballistic missile ---------- */
+function siloTick(b,dt){
+  const cfg=BDEF.silo.strike;
+  if(b.charge===undefined)b.charge=cfg.charge;
+  if(b.charge>0&&powerRatio(b.team)>=1){
+    b.charge-=dt;
+    if(b.charge<=0){
+      b.charge=0;
+      if(b.team===G.myTeam){announce('Missile Silo ready: select it and pick a target');sfx.ready();}
+    }
+  }
+}
+function _launchMissile(team,x,z){
+  const silo=G.ents.find(e=>!e.dead&&e.cat==='b'&&e.type==='silo'&&e.team===team&&e.charge<=0);
+  if(!silo)return;
+  const cfg=BDEF.silo.strike;
+  silo.charge=cfg.charge;
+  /* a very fast, very heavy shell: the Iron Dome CAN swat it, which is the point */
+  const from=new THREE.Vector3(silo.pos.x,silo.pos.y+6,silo.pos.z);
+  const to=new THREE.Vector3(x,groundH(x,z),z);
+  const mesh=new THREE.Mesh(new THREE.ConeGeometry(0.6,3.0,7),
+    new THREE.MeshBasicMaterial({color:0xffd9a0}));
+  mesh.position.copy(from);scene.add(mesh);
+  const dist=from.distanceTo(to);
+  const owner={pos:silo.pos,team,rank:0,def:{weapon:{type:'ballistic'}},cat:'b',id:silo.id};
+  G.projectiles.push({kind:'shell',from,to,mesh,k:0,dur:Math.max(2.2,dist/60),
+    arc:60,dmg:cfg.dmg,aoe:cfg.aoe,owner,tgt:null});
+  if(team===G.myTeam){announce('Missile away');mmPing(x,z,'#ff5d5d');}
+  else announce('Incoming ballistic missile');
+  sfx.alert();
 }
 
 /* ---------- repair, garrison, deploy: sim ---------- */
@@ -7268,7 +7417,15 @@ updateUnit=function(u,dt){
 const _updBld6=updateBuilding;
 updateBuilding=function(b,dt){
   if(b.type==='bunker'){bunkerTick(b,dt);return;}
+  if(b.type==='samsite'){samTick(b,dt);return;}
+  if(b.type==='silo'){siloTick(b,dt);return;}
+  if(b.type==='irondome')return;                  /* handled once per tick, not per dome */
   _updBld6(b,dt);
+};
+const _stepSim6=stepSim;
+stepSim=function(dt){
+  _stepSim6(dt);
+  ironDomeTick(dt);
 };
 
 /* ---------- orders: senders ---------- */
@@ -7306,6 +7463,11 @@ CB.cGarrison.onclick=()=>{
   armCmd('garrison',CB.cGarrison);
 };
 CB.cDig.onclick=()=>{orderDig();clearPending();};
+CB.cStrike.onclick=()=>{
+  const s=G.selected.length===1&&G.selected[0].type==='silo'?G.selected[0]:null;
+  if(!s||s.charge>0){sfx.deny();announce(s?'Missile still in reload':'Select a ready Missile Silo');return;}
+  armCmd('strike',CB.cStrike);
+};
 
 const _updCmdbar6=updateCmdbar;
 updateCmdbar=function(){
@@ -7321,6 +7483,14 @@ updateCmdbar=function(){
   CB.cGarrison.classList.toggle('off',!(inf||gar));
   CB.cGarrison.querySelector('small').textContent=gar?'eject':'garrison';
   CB.cDig.classList.toggle('off',!units.some(u=>u.def.deployable));
+  const silo=sel.length===1&&sel[0].type==='silo'?sel[0]:null;
+  CB.cStrike.classList.toggle('off',!silo);
+  if(silo){
+    const raw=(silo.charge===undefined)?BDEF.silo.strike.charge:silo.charge;
+    const c=Math.max(0,Math.ceil(raw));
+    CB.cStrike.querySelector('small').textContent=c>0?(Math.floor(c/60)+':'+String(c%60).padStart(2,'0')):'ready';
+    CB.cStrike.classList.toggle('arm',c<=0&&G.pendingCmd==='strike');
+  }
   if(units.some(u=>u.def.deployable))
     CB.cDig.querySelector('small').textContent=units.every(u=>u.deployed)?'pack up':'dig in';
 };
@@ -7352,7 +7522,8 @@ document.getElementById('selAir').onclick=()=>selectBy(u=>uRole(u)==='air','Air'
 const _mkUnit0=makeUnitMesh;
 makeUnitMesh=function(type,team){
   const N6=['engineer','medic','mgteam','gunship','bomber','fighter',
-            'seamcv','scoutcar','aatrack','artillery','flametank','stealth','heavylift'];
+            'seamcv','scoutcar','aatrack','artillery','flametank','stealth','heavylift',
+            'aadestroyer','fieldgun'];
   if(!N6.includes(type))return _mkUnit0(type,team);
   const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
   const HM=hMat(team,false),HD=hMat(team,true);
@@ -7424,6 +7595,36 @@ makeUnitMesh=function(type,team){
     g.add(box(0.3,0.3,3.4,GUN,1.7,5.9,-1.0));
     g.add(box(4.6,0.9,0.5,GUN,0,1.5,-6.1));                        /* bow ramp */
     g.add(lamp(0.2,0.14,0.1,LAMPA,0,4.6,-3.4));
+  }else if(type==='aadestroyer'){
+    g.add(box(4.2,1.4,13.0,HM,0,1.1,0));                           /* hull */
+    g.add(box(3.6,0.4,12.0,td,0,1.9,0));
+    g.add(box(2.6,2.2,4.0,HD,0,3.0,-1.0));                         /* superstructure */
+    g.add(box(1.8,1.0,0.16,winMat(),0,3.6,-3.0));
+    g.add(cyl(0.16,0.16,4.6,GUN,0,6.2,-0.6));                      /* mast */
+    g.add(box(2.2,1.4,0.2,GUN,0,7.2,-0.6));                        /* phased array */
+    g.add(box(0.2,1.4,2.2,GUN,0,7.2,-0.6));
+    const t=new THREE.Group();
+    t.add(box(2.4,0.9,2.4,HD,0,0,0));                              /* VLS cells */
+    for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)
+      t.add(cyl(0.2,0.2,0.9,LAMPA,i*0.7,0.55,j*0.7));
+    t.position.set(0,2.4,3.6);g.add(t);g.userData.turret=t;
+    g.add(box(1.2,0.6,1.2,PIPE,0,2.5,5.6));
+  }else if(type==='fieldgun'){
+    /* towed howitzer with a two-man crew */
+    g.add(box(0.55,0.7,0.4,tm,-0.9,0.85,0.5));
+    g.add(box(0.45,0.3,0.32,HD,-0.9,1.35,0.5));
+    g.add(box(0.55,0.7,0.4,tm,0.9,0.85,0.5));
+    g.add(box(0.45,0.3,0.32,HD,0.9,1.35,0.5));
+    g.add(cyl(0.4,0.4,0.2,GUN,-0.8,0.4,-0.2,0,1.5708));            /* wheels */
+    g.add(cyl(0.4,0.4,0.2,GUN,0.8,0.4,-0.2,0,1.5708));
+    g.add(box(1.6,0.25,0.5,td,0,0.55,-0.2));                       /* carriage */
+    g.add(box(0.25,0.2,1.7,td,-0.5,0.4,0.9));                      /* trails */
+    g.add(box(0.25,0.2,1.7,td,0.5,0.4,0.9));
+    const t=new THREE.Group();
+    t.add(box(1.1,0.5,0.4,GUN,0,0,0));                             /* breech */
+    t.add(cyl(0.11,0.09,3.4,GUN,0,0.12,-1.8,1.5708));              /* barrel */
+    t.add(box(1.3,0.7,0.1,td,0,0.15,-0.5));                        /* gun shield */
+    t.position.set(0,0.85,-0.3);g.add(t);g.userData.turret=t;g.userData.mg=t;
   }else if(type==='scoutcar'){
     g.add(box(1.7,0.8,3.4,HM,0,0.95,0));
     g.add(box(1.5,0.5,1.2,HD,0,1.6,-0.3));                         /* cab */
@@ -7605,7 +7806,7 @@ makeUnitMesh=function(type,team){
 };
 const _mkBld0=makeBuildingMesh;
 makeBuildingMesh=function(type,team){
-  const N6=['mechbay','drydock','airhangar','dronetech','bunker','fleetcmd'];
+  const N6=['mechbay','drydock','airhangar','dronetech','bunker','fleetcmd','samsite','irondome','silo'];
   if(!N6.includes(type))return _mkBld0(type,team);
   const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
   const WM=wallMat(team),DM=doorMat(team),HZ=hazMat();
@@ -7659,6 +7860,49 @@ makeBuildingMesh=function(type,team){
     g.add(cyl(0.05,0.05,1.6,GUN,2.5,3.9,-0.5));                    /* aerials */
     g.add(cyl(0.05,0.05,1.2,GUN,-2.5,3.7,-0.5));
     g.add(box(1.0,0.9,0.6,PIPE,2.4,0.65,2.4));                     /* parts crate */
+  }else if(type==='samsite'){
+    g.add(box(7,0.3,7,td,0,0.16,0));
+    g.add(box(3.4,1.4,3.4,WM,0,0.9,0));                            /* base block */
+    const t=new THREE.Group();
+    for(let i=-1;i<=1;i+=2)for(let j=-1;j<=1;j+=2)
+      t.add(box(0.5,2.6,0.5,GUN,i*0.75,1.3,j*0.5));                /* four canted rails */
+    for(let i=-1;i<=1;i+=2)for(let j=-1;j<=1;j+=2)
+      t.add(cyl(0.16,0.06,2.4,LAMPA,i*0.75,1.5,j*0.5));            /* missiles */
+    t.rotation.x=-0.42;t.position.set(0,1.7,0);
+    g.add(t);g.userData.turret=t;
+    g.add(cyl(0.06,0.06,2.0,GUN,2.6,2.2,-2.4));                    /* fire-control radar */
+    g.add(box(1.4,0.1,0.5,GUN,2.6,3.3,-2.4));
+    g.add(lamp(0.16,0.12,0.08,LAMPA,-2.6,1.5,2.6));
+  }else if(type==='irondome'){
+    g.add(box(9,0.3,9,td,0,0.16,0));
+    g.add(box(5.0,2.0,5.0,WM,0,1.2,0));                            /* bunker plinth */
+    g.add(box(5.4,0.4,5.4,td,0,2.35,0));
+    /* honeycomb launcher */
+    for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)
+      g.add(cyl(0.34,0.34,1.6,GUN,i*1.3,3.2,j*1.3));
+    for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)
+      g.add(lamp(0.2,0.2,0.2,LAMPA,i*1.3,4.05,j*1.3));
+    /* rotating search radar */
+    const r=new THREE.Group();
+    r.add(cyl(0.09,0.09,2.6,GUN,0,0,0));
+    r.add(box(3.0,0.14,0.7,GUN,0,1.4,0));
+    r.position.set(3.4,3.4,3.4);g.add(r);g.userData.rotor=r;
+    g.add(lamp(0.18,0.14,0.1,LAMPA,-3.4,2.6,-3.4));
+  }else if(type==='silo'){
+    g.add(box(11,0.3,11,td,0,0.16,0));
+    g.add(box(6.5,1.6,6.5,WM,0,1.0,0));                            /* hardened deck */
+    g.add(box(7.0,0.4,7.0,td,0,1.95,0));
+    /* the hatch, cracked open */
+    g.add(box(4.6,0.3,2.4,GUN,0,2.2,-1.4));
+    g.add(box(4.6,0.3,2.4,GUN,0,2.2,1.4));
+    g.add(cyl(2.0,2.0,0.5,GUN,0,2.3,0));
+    g.add(cyl(1.5,1.1,6.0,LAMPA,0,5.2,0));                         /* missile in the tube */
+    g.add(cyl(0.5,0.05,1.6,MEDMAT,0,9.0,0));                       /* warhead */
+    g.add(box(2.0,2.4,2.0,PIPE,4.0,1.9,4.0));                      /* control blockhouse */
+    g.add(box(1.0,0.9,0.16,winMat(),4.0,1.9,2.95));
+    g.add(cyl(0.07,0.07,3.0,GUN,-4.2,3.2,-4.2));
+    g.add(lamp(0.2,0.16,0.1,MEDMAT,-4.2,4.9,-4.2));
+    g.add(box(5.0,0.3,0.35,HZ,0,0.35,5.6));
   }else if(type==='fleetcmd'){
     g.add(box(12,0.3,12,td,0,0.16,0));                             /* apron */
     g.add(box(9,5.0,7.5,WM,0,2.7,-1.4));                           /* tower block */
@@ -7776,6 +8020,11 @@ function execPendingV5(cx,cy,w){
     const b=entityAt(cx,cy,G.myTeam);
     if(b&&b.cat==='b'&&b.hp<b.maxhp)orderFix(b);
     else{sfx.deny();announce('Select a damaged friendly building');}
+    clearPending();return;
+  }
+  if(cmd==='strike'){
+    if(w)netCmd({k:'ms',x:w.x,z:w.z});
+    else sfx.deny();
     clearPending();return;
   }
   if(cmd==='attack'){
