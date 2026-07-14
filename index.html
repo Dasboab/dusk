@@ -5811,11 +5811,11 @@ function execCmd(team,c){
         case 'bd':if(tg&&!tg.dead&&tg.team===team)_ordBoard(units,tg);break;
         case 'ul':_ordUnload(units);break;
       }break;}
-    case 'pr':_prodStart(team,c.kind,c.type);break;
+    case 'pr':_prodStart(team,c.kind,c.type,c.pb);break;
     case 'cx':_prodCancel(team,c.kind,c.type);break;
     case 'pl':_placeBuilding(team,c.type,c.x,c.z);break;
     case 'ra':{const b=entById(c.b);if(b&&!b.dead&&b.team===team&&b.cat==='b')_setRally(b,c.x,c.z);break;}
-    case 'dp':{const u=entById(c.id);if(u&&!u.dead&&u.team===team&&u.type==='mobilehq')_deployHQ(u);break;}
+    case 'dp':{const u=entById(c.id);if(u&&!u.dead&&u.team===team&&(u.type==='mobilehq'||u.def.seamcv))_deployHQ(u);break;}
     case 'rp':_ordRepair(cmdUnits(team,c));break;
     case 'fx':{const b=entById(c.tg);if(b&&!b.dead&&b.cat==='b'&&b.team===team)_ordFix(cmdUnits(team,c),b);break;}
     case 'gr':{const b=entById(c.tg);if(b&&!b.dead&&b.type==='bunker'&&b.team===team)_ordGarrison(cmdUnits(team,c),b);break;}
@@ -6547,6 +6547,16 @@ function initSidebar(){
   for(const t of NAV_ORDER)makeSbButton('u',t,nl);
   refreshSidebar();
 }
+function primaryFor(team,from){
+  let best=null,bd=1e12;
+  for(const e of G.ents){
+    if(e.dead||e.team!==team||e.type!==from)continue;
+    if(e.building)continue;                       // still under construction
+    const dd=d2(cam.x,cam.z,e.pos.x,e.pos.z);     // cam.x/z is the point you are looking at
+    if(dd<bd){bd=dd;best=e;}
+  }
+  return best;
+}
 function sbClick(kind,type){
   const T=G.myTeam, ps=G.prodStructs[T];
   if(kind==='b'){
@@ -6561,10 +6571,16 @@ function sbClick(kind,type){
     if(!hasBuilding(T,d.from)){sfx.deny();announce('Requires '+BDEF[d.from].name);return;}
     const q=G.queues[T][d.from];
     if(q&&q.length>=9){sfx.deny();return;}
-    sfx.click();netCmd({k:'pr',kind:'u',type});
+    const pb=primaryFor(T,d.from);          // nearest to what you are looking at
+    sfx.click();netCmd({k:'pr',kind:'u',type,pb:pb?pb.id:0});
+    if(pb){
+      mmPing(pb.pos.x,pb.pos.z,'#f0a24a');
+      const n=G.ents.filter(e=>!e.dead&&e.team===T&&e.type===d.from).length;
+      if(n>1)announce(d.name+' \u2192 '+BDEF[d.from].name+' nearest your view');
+    }
   }
 }
-function _prodStart(team,kind,type){
+function _prodStart(team,kind,type,pb){
   if(kind==='b'){
     if(G.prodStructs[team])return;
     const d=BDEF[type];
@@ -6575,7 +6591,7 @@ function _prodStart(team,kind,type){
     if(!hasBuilding(team,d.from))return;
     const q=G.queues[team][d.from]||(G.queues[team][d.from]=[]);
     if(q.length>=9)return;
-    q.push({type,left:d.time,total:d.time,paid:0});
+    q.push({type,left:d.time,total:d.time,paid:0,pb:pb||0});
   }
   if(team===G.myTeam)refreshSidebar();
 }
@@ -6626,7 +6642,9 @@ function prodTickTeams(dt,froms){
       if(!hasBuilding(T,from))continue;
       if(prodDrain(q[0],UDEF[q[0].type].cost,dt,rate,T)){
         const item=q.shift();
-        const prod=G.ents.find(e=>!e.dead&&e.team===T&&e.type===from);
+        let prod=item.pb?entById(item.pb):null;
+        if(!prod||prod.dead||prod.team!==T||prod.type!==from)
+          prod=G.ents.find(e=>!e.dead&&e.team===T&&e.type===from);   // designated building is gone
         if(prod){
           let sx=prod.pos.x+rand(-2,2), sz=prod.pos.z+prod.faceZ*(prod.def.size*0.5+2.5);
           if(from==='navalyard'){sz=prod.pos.z+rand(-3,3);sx=Math.max(prod.pos.x+prod.def.size*0.5+6, shoreX(sz)+8+rand(0,4));}
@@ -6642,7 +6660,7 @@ function prodTickTeams(dt,froms){
   refreshSidebar();
 }
 function prodTick(dt){
-  prodTickTeams(dt,['barracks','factory','navalyard']);
+  prodTickTeams(dt,['barracks','factory','navalyard','airfield','airhangar','dronebay','robotics','ewcenter','fleetcmd']);
 }
 function refreshSidebar(){
   for(const key in sbBtns){
@@ -6944,7 +6962,10 @@ BDEF.dronetech={name:'Drone Technician',  cost:700,  time:8,  hp:800,  power:-10
                 repairs:'drone', blurb:'Bench repairs for drones and bots'};
 BDEF.bunker   ={name:'Bunker',           cost:450,  time:7,  hp:1800, power:-5,  size:6,  sight:24, prereq:'barracks',
                 garrison:4,      blurb:'Garrison infantry: they fire out, hard to kill'};
-BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','airhangar','dronetech','bunker');
+/* deep naval tech: Naval Yard -> Dry Dock -> Fleet Command, the gate on the sea MCV */
+BDEF.fleetcmd ={name:'Fleet Command',    cost:2200, time:26, hp:1600, power:-40, size:12, sight:26, prereq:'drydock',
+                blurb:'Unlocks the amphibious MCV and heavy hulls'};
+BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','fleetcmd','airhangar','dronetech','bunker');
 
 /* which depot repairs a given unit */
 function repairClass(u){
@@ -6972,6 +6993,31 @@ UDEF.mgteam   ={name:'MG Team',         cost:280, time:5, hp:140, speed:7.4, r:0
                 deployed:{dmg:11, range:22, cd:0.22, type:'bullet'}};
 
 /* ---------- more air ---------- */
+/* --- offshore MCV: sails out, beaches itself, becomes a Construction Yard --- */
+UDEF.seamcv   ={name:'Amphib MCV Kraken', cost:3200, time:38, hp:1000, speed:8.4, r:3.0, sight:22, armor:'veh', from:'fleetcmd',
+                domain:'sea', blurb:'Sails to a far shore and unfolds into a base', seamcv:true};
+
+/* --- more armour --- */
+UDEF.scoutcar ={name:'Scout Car Whippet', cost:450, time:6, hp:220, speed:19.0, r:1.2, sight:30, armor:'veh', from:'factory',
+                blurb:'Fast eyes, light gun, dies to anything real',
+                weapon:{dmg:9, range:12, cd:0.45, type:'bullet'}};
+UDEF.aatrack  ={name:'AA Track Hailstorm', cost:900, time:10, hp:420, speed:11.5, r:1.5, sight:26, armor:'veh', from:'factory',
+                blurb:'Flak: shreds aircraft, cannot hit ground',
+                weapon:{dmg:26, range:22, cd:0.5, type:'bullet', airOnly:true}};
+UDEF.artillery={name:'Artillery Basilisk', cost:1600, time:16, hp:340, speed:6.2, r:1.7, sight:20, armor:'veh', from:'factory',
+                blurb:'Outranges everything, helpless up close',
+                weapon:{dmg:95, range:38, minRange:12, cd:5.5, type:'shell', aoe:8}};
+UDEF.flametank={name:'Flame Tank Pyre',   cost:1100, time:12, hp:700, speed:10.5, r:1.6, sight:16, armor:'veh', from:'factory',
+                blurb:'Burns infantry and bunkers out of cover',
+                weapon:{dmg:34, range:9, cd:0.7, type:'bullet', aoe:4}};
+
+/* --- more aircraft --- */
+UDEF.stealth  ={name:'Stealth Wraith',    cost:2400, time:22, hp:240, speed:26.0, r:1.9, sight:30, armor:'veh', from:'airhangar',
+                domain:'air', blurb:'Unseen until it fires. Hunts structures',
+                weapon:{dmg:140, range:8, cd:8.0, type:'shell', aoe:6}};
+UDEF.heavylift={name:'Heavy Lifter Ox',   cost:1200, time:13, hp:420, speed:15.0, r:2.4, sight:22, armor:'veh', from:'airhangar',
+                domain:'air', cap:5, blurb:'Flies five infantry over anything'};
+
 UDEF.gunship  ={name:'Gunship Hydra',   cost:1500, time:15, hp:300, speed:17.0, r:2.0, sight:28, armor:'veh', from:'airfield',
                 domain:'air', blurb:'Rotary cannon, shreds ground',
                 weapon:{dmg:15, range:17, cd:0.28, type:'bullet'}};
@@ -6983,7 +7029,9 @@ UDEF.fighter  ={name:'Fighter Talon',   cost:1400, time:14, hp:220, speed:30.0, 
                 weapon:{dmg:30, range:20, cd:0.9, type:'bullet', airOnly:true}};
 
 INF_ORDER.push('engineer','medic','mgteam');
-VEH_ORDER.push('gunship','bomber','fighter');
+VEH_ORDER.push('scoutcar','aatrack','flametank','artillery','gunship','bomber','fighter','stealth','heavylift');
+NAV_ORDER.push('seamcv');
+G.queues.fleetcmd=[];
 G.queues.mechbay=[];G.queues.drydock=[];G.queues.airhangar=[];G.queues.dronetech=[];G.queues.bunker=[];
 
 /* Deterministic search for OPEN water near a latitude. Bases rotate, so a fleet can
@@ -7303,7 +7351,8 @@ document.getElementById('selAir').onclick=()=>selectBy(u=>uRole(u)==='air','Air'
 /* ---------- meshes ---------- */
 const _mkUnit0=makeUnitMesh;
 makeUnitMesh=function(type,team){
-  const N6=['engineer','medic','mgteam','gunship','bomber','fighter'];
+  const N6=['engineer','medic','mgteam','gunship','bomber','fighter',
+            'seamcv','scoutcar','aatrack','artillery','flametank','stealth','heavylift'];
   if(!N6.includes(type))return _mkUnit0(type,team);
   const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
   const HM=hMat(team,false),HD=hMat(team,true);
@@ -7364,6 +7413,81 @@ makeUnitMesh=function(type,team){
     g.add(cyl(0.42,0.42,1.5,PIPE,-2.6,2.75,0.2,1.5708));           /* engines */
     g.add(cyl(0.42,0.42,1.5,PIPE,2.6,2.75,0.2,1.5708));
     g.add(box(1.0,0.5,2.4,GUN,0,2.35,0.4));                        /* bomb bay */
+  }else if(type==='seamcv'){
+    g.add(box(5.0,1.5,12.0,HM,0,1.1,0));                           /* hull */
+    g.add(box(4.4,0.5,11.0,td,0,1.9,0));                           /* deck */
+    g.add(box(3.2,2.4,3.6,wallMat(team),0,3.0,-3.4));                        /* the folded yard */
+    g.add(box(3.6,0.4,4.0,td,0,4.3,-3.4));
+    g.add(box(2.0,1.8,2.2,PIPE,0,2.9,2.6));                        /* bridge */
+    g.add(box(1.4,0.8,0.16,winMat(),0,3.3,1.5));
+    g.add(cyl(0.22,0.22,4.0,GUN,1.7,4.0,0.4));                     /* derrick */
+    g.add(box(0.3,0.3,3.4,GUN,1.7,5.9,-1.0));
+    g.add(box(4.6,0.9,0.5,GUN,0,1.5,-6.1));                        /* bow ramp */
+    g.add(lamp(0.2,0.14,0.1,LAMPA,0,4.6,-3.4));
+  }else if(type==='scoutcar'){
+    g.add(box(1.7,0.8,3.4,HM,0,0.95,0));
+    g.add(box(1.5,0.5,1.2,HD,0,1.6,-0.3));                         /* cab */
+    g.add(box(1.1,0.35,0.16,winMat(),0,1.62,-0.92));
+    for(const[x,z]of[[-0.95,1.2],[0.95,1.2],[-0.95,-1.1],[0.95,-1.1]])
+      g.add(cyl(0.42,0.42,0.34,GUN,x,0.44,z,0,1.5708));
+    const t=new THREE.Group();
+    t.add(cyl(0.05,0.05,1.0,GUN,0,0,-0.4,1.5708));
+    t.add(box(0.36,0.24,0.36,GUN,0,0,0.1));
+    t.position.set(0,1.9,0.4);g.add(t);g.userData.turret=t;
+  }else if(type==='aatrack'){
+    g.add(box(2.5,1.0,4.2,HM,0,0.95,0));                           /* hull */
+    g.add(box(2.7,0.4,4.4,td,0,1.5,0));
+    for(let i=0;i<4;i++){g.add(cyl(0.36,0.36,0.4,GUN,-1.3,0.5,-1.5+i,0,1.5708));
+                         g.add(cyl(0.36,0.36,0.4,GUN,1.3,0.5,-1.5+i,0,1.5708));}
+    const t=new THREE.Group();
+    t.add(box(1.7,0.8,1.7,HD,0,0,0));                              /* flak mount */
+    t.add(cyl(0.09,0.09,2.4,GUN,-0.32,0.35,-1.0,1.5708));
+    t.add(cyl(0.09,0.09,2.4,GUN,0.32,0.35,-1.0,1.5708));
+    t.add(box(0.7,0.5,0.5,PIPE,0,0.1,0.85));                       /* ammo box */
+    t.position.set(0,2.0,-0.2);g.add(t);g.userData.turret=t;
+  }else if(type==='artillery'){
+    g.add(box(2.7,1.1,5.2,HM,0,1.0,0));
+    g.add(box(2.9,0.4,5.4,td,0,1.6,0));
+    for(let i=0;i<5;i++){g.add(cyl(0.4,0.4,0.4,GUN,-1.4,0.5,-2+i,0,1.5708));
+                         g.add(cyl(0.4,0.4,0.4,GUN,1.4,0.5,-2+i,0,1.5708));}
+    g.add(box(1.6,0.5,1.6,GUN,-1.9,1.2,2.2));                      /* outriggers */
+    g.add(box(1.6,0.5,1.6,GUN,1.9,1.2,2.2));
+    const t=new THREE.Group();
+    t.add(box(1.9,1.0,2.2,HD,0,0,0.4));
+    t.add(cyl(0.16,0.13,6.2,GUN,0,0.34,-3.0,1.5708));              /* long barrel */
+    t.add(cyl(0.3,0.3,0.7,PIPE,0,0.34,0.3,1.5708));                /* breech */
+    t.position.set(0,2.1,-0.4);g.add(t);g.userData.turret=t;
+  }else if(type==='flametank'){
+    g.add(box(2.8,1.2,4.6,HM,0,1.0,0));
+    g.add(box(3.0,0.45,4.8,td,0,1.7,0));
+    for(let i=0;i<5;i++){g.add(cyl(0.44,0.44,0.45,GUN,-1.5,0.55,-1.8+i*0.9,0,1.5708));
+                         g.add(cyl(0.44,0.44,0.45,GUN,1.5,0.55,-1.8+i*0.9,0,1.5708));}
+    g.add(cyl(0.62,0.62,3.2,PIPE,0,2.5,1.3,1.5708));               /* fuel drum */
+    g.add(cyl(0.24,0.24,0.9,GUN,-0.9,2.3,0.2));
+    const t=new THREE.Group();
+    t.add(box(1.7,0.8,1.7,HD,0,0,0));
+    t.add(cyl(0.16,0.22,2.6,GUN,0,0.1,-1.5,1.5708));               /* flared nozzle */
+    t.add(lamp(0.2,0.2,0.2,MEDMAT,0,0.1,-2.8));
+    t.position.set(0,2.1,-0.4);g.add(t);g.userData.turret=t;
+  }else if(type==='stealth'){
+    g.add(box(1.0,0.7,5.4,GUN,0,2.9,0));                           /* faceted dark airframe */
+    g.add(box(7.2,0.14,2.4,GUN,0,2.85,0.9));                       /* flying wing */
+    g.add(box(2.6,0.12,1.0,GUN,0,2.9,2.6));
+    g.add(box(0.7,0.4,1.0,winMat(),0,3.2,-1.6));
+    g.add(cyl(0.26,0.3,0.9,PIPE,-0.7,2.85,2.7,1.5708));
+    g.add(cyl(0.26,0.3,0.9,PIPE,0.7,2.85,2.7,1.5708));
+  }else if(type==='heavylift'){
+    g.add(box(2.4,2.2,7.0,HM,0,3.0,0));                            /* fat fuselage */
+    g.add(box(1.8,0.9,1.4,winMat(),0,3.6,-3.2));
+    g.add(box(2.6,0.4,3.0,td,0,1.9,1.0));                          /* cargo floor */
+    g.add(box(0.5,0.7,2.6,HD,0,3.2,4.2));                          /* tail boom */
+    g.add(box(0.2,1.4,1.0,td,0,4.0,5.2));
+    const rot=new THREE.Group();
+    for(let i=0;i<5;i++){const bl=box(0.22,0.06,7.6,GUN,0,0,0);bl.rotation.y=i*1.2566;rot.add(bl);}
+    rot.position.set(0,4.4,-0.4);g.add(rot);g.userData.rotor=rot;
+    const trot=new THREE.Group();
+    for(let i=0;i<2;i++){const bl=box(0.07,1.9,0.14,GUN,0,0,0);bl.rotation.z=i*1.5708;trot.add(bl);}
+    trot.position.set(0.3,3.9,5.3);g.add(trot);g.userData.trotor=trot;
   }else{ /* fighter */
     g.add(box(1.1,0.9,5.6,HM,0,2.8,0));
     g.add(box(0.9,0.5,1.2,winMat(),0,3.15,-1.6));
@@ -7481,7 +7605,7 @@ makeUnitMesh=function(type,team){
 };
 const _mkBld0=makeBuildingMesh;
 makeBuildingMesh=function(type,team){
-  const N6=['mechbay','drydock','airhangar','dronetech','bunker'];
+  const N6=['mechbay','drydock','airhangar','dronetech','bunker','fleetcmd'];
   if(!N6.includes(type))return _mkBld0(type,team);
   const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
   const WM=wallMat(team),DM=doorMat(team),HZ=hazMat();
@@ -7535,6 +7659,21 @@ makeBuildingMesh=function(type,team){
     g.add(cyl(0.05,0.05,1.6,GUN,2.5,3.9,-0.5));                    /* aerials */
     g.add(cyl(0.05,0.05,1.2,GUN,-2.5,3.7,-0.5));
     g.add(box(1.0,0.9,0.6,PIPE,2.4,0.65,2.4));                     /* parts crate */
+  }else if(type==='fleetcmd'){
+    g.add(box(12,0.3,12,td,0,0.16,0));                             /* apron */
+    g.add(box(9,5.0,7.5,WM,0,2.7,-1.4));                           /* tower block */
+    g.add(box(9.4,0.5,7.9,td,0,5.35,-1.4));
+    g.add(box(5.0,2.2,0.2,winMat(),0,3.4,2.4));                    /* ops glazing */
+    g.add(box(3.4,2.6,3.4,WM,2.6,6.8,-1.4));                       /* control cab */
+    g.add(box(3.6,0.35,3.6,td,2.6,8.25,-1.4));
+    g.add(box(2.6,1.3,0.16,winMat(),2.6,6.9,0.32));
+    g.add(cyl(0.16,0.16,5.0,GUN,-3.2,7.8,-1.4));                   /* mast + radar */
+    g.add(box(2.6,0.12,1.0,GUN,-3.2,10.1,-1.4));
+    g.add(cyl(1.5,1.5,0.3,PIPE,-3.2,10.5,-1.4));
+    g.add(box(3.0,1.2,3.0,PIPE,-3.4,0.9,4.2));                     /* dockside gear */
+    g.add(box(4.6,0.3,0.4,HZ,0,0.35,5.6));
+    g.add(lamp(0.24,0.18,0.12,LAMPA,-3.2,10.9,-1.4));
+    g.add(lamp(0.2,0.14,0.1,LAMPA,4.3,5.6,2.0));
   }else{ /* bunker */
     g.add(box(6,0.3,6,td,0,0.16,0));
     g.add(box(5.4,1.5,5.0,WM,0,0.9,0));                            /* body */
@@ -7752,13 +7891,61 @@ function findNearbyDeploy(x0,z0){
 }
 function deployMobileHQ(){
   const u=G.selected.length===1&&G.selected[0];
-  if(!u||u.type!=='mobilehq'||u.team!==G.myTeam)return;
+  if(!u||u.team!==G.myTeam)return;
+  if(u.def.seamcv){
+    if(!findBeachhead(u.pos.x,u.pos.z)){announce('No landing site: sail closer to open shore');sfx.deny();return;}
+    sfx.place();netCmd({k:'dp',id:u.id});return;
+  }
+  if(u.type!=='mobilehq')return;
   const spot=findNearbyDeploy(u.pos.x,u.pos.z);
   if(!spot){announce('No open ground nearby: move the HQ to flatter terrain');sfx.deny();return;}
   sfx.place();
   netCmd({k:'dp',id:u.id});
 }
+function findBeachhead(x0,z0){
+  /* walk inland (west) from the boat until we find dry, buildable ground */
+  for(let r=6;r<=90;r+=3){
+    for(let a=0;a<Math.PI*2;a+=Math.PI/16){
+      const x=Math.round((x0+Math.cos(a)*r)/2)*2, z=Math.round((z0+Math.sin(a)*r)/2)*2;
+      if(Math.abs(x)>HALF-14||Math.abs(z)>HALF-14)continue;
+      if(isWater(x,z))continue;
+      let bad=false;
+      for(const e of G.ents){
+        if(e.dead||e.cat!=='b')continue;
+        if(d2(x,z,e.pos.x,e.pos.z)<70){bad=true;break;}
+      }
+      if(bad)continue;
+      /* needs a flat-ish pad for a con yard */
+      const h=groundH(x,z);
+      let rough=false;
+      for(const[dx,dz]of[[7,0],[-7,0],[0,7],[0,-7]])
+        if(Math.abs(groundH(x+dx,z+dz)-h)>3.2){rough=true;break;}
+      if(rough)continue;
+      return{x,z};
+    }
+  }
+  return null;
+}
+function _deploySeaMCV(u){
+  const spot=findBeachhead(u.pos.x,u.pos.z);
+  if(!spot){
+    if(u.team===G.myTeam){sfx.deny();announce('No landing site: sail closer to open shore');}
+    return;
+  }
+  const team=u.team;
+  u.dead=true;scene.remove(u.mesh);
+  G.ents=G.ents.filter(e=>e!==u);
+  G.selected=G.selected.filter(e=>e!==u);
+  const cy=spawnBuilding('conyard',spot.x,spot.z,team,true);
+  if(team===G.myTeam){
+    setSelection([cy]);
+    announce('Beachhead established: second base online');
+    sfx.ready();mmPing(spot.x,spot.z,'#37e0cf');
+    refreshSidebar();
+  }
+}
 function _deployHQ(u){
+  if(u.def.seamcv){_deploySeaMCV(u);return;}
   const spot=findNearbyDeploy(u.pos.x,u.pos.z);
   if(!spot)return;
   const team=u.team;
@@ -7788,7 +7975,9 @@ updateCmdbar=function(){
   const PRODS=['barracks','factory','navalyard','dronebay','robotics','ewcenter','airfield'];
   const prod=sel.length===1&&sel[0].cat==='b'&&PRODS.includes(sel[0].type);
   CB.cRally.classList.toggle('off',!prod);
-  CB.cDeploy.classList.toggle('off',!(sel.length===1&&sel[0].type==='mobilehq'));
+  const dep=sel.length===1&&(sel[0].type==='mobilehq'||(sel[0].def&&sel[0].def.seamcv));
+  CB.cDeploy.classList.toggle('off',!dep);
+  if(dep)CB.cDeploy.querySelector('small').textContent=sel[0].def.seamcv?'make base':'deploy';
   if(sel.length===1&&sel[0].type==='landingcraft'){
     const chip=document.getElementById('selchip');
     chip.innerHTML+='<div class="shp">Carrying '+sel[0].cargoUnits.length+' / '+sel[0].def.cap+'</div>';
