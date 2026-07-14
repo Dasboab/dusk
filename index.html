@@ -6018,6 +6018,7 @@ function muzzleY(u){
 function fireWeapon(u,t){
   const w=(u.deployed&&u.def.deployed)?u.def.deployed:u.def.weapon;
   u.cd=w.cd*(u.rank>0?1-u.rank*0.08:1);
+  if(w.type==='arty'&&typeof cbSpot==='function')cbSpot(u);   /* indirect fire gives you away */
   const from=new THREE.Vector3(u.pos.x,muzzleY(u),u.pos.z);
   const dir=tmpV2.set(t.pos.x-u.pos.x,0,t.pos.z-u.pos.z).normalize();
   from.x+=dir.x*(u.r+0.6);from.z+=dir.z*(u.r+0.6);
@@ -7025,7 +7026,13 @@ BDEF.irondome ={name:'Iron Dome',        cost:2600, time:28, hp:1200, power:-60,
 BDEF.silo     ={name:'Missile Silo',     cost:5000, time:60, hp:1800, power:-100, size:11, sight:22, prereq:'fleetcmd',
                 blurb:'Ballistic missile. Six minute reload. Ends arguments',
                 strike:{dmg:900, aoe:26, charge:360}};
-BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','fleetcmd','airhangar','dronetech','bunker','samsite','irondome','silo');
+BDEF.jammer   ={name:'EW Jammer',        cost:1900, time:20, hp:1000, power:-55, size:8,  sight:26, prereq:'ewcenter',
+                blurb:'Drones that stray into its bubble lose the link and fall',
+                jam:{range:36, kill:2.2}};
+BDEF.cbradar  ={name:'Counter-Battery Radar', cost:1500, time:16, hp:900, power:-40, size:8, sight:30, prereq:'ewcenter',
+                blurb:'Back-plots any gun that fires nearby and lights it up',
+                cb:{range:110, hold:14}};
+BUILD_ORDER.splice(BUILD_ORDER.indexOf('turret'),0,'mechbay','drydock','fleetcmd','airhangar','dronetech','bunker','samsite','irondome','jammer','cbradar','silo');
 
 /* which depot repairs a given unit */
 function repairClass(u){
@@ -7152,14 +7159,81 @@ function ironDomeTick(dt){
       if(p.intercepted)continue;
       const px=p.mesh.position.x, pz=p.mesh.position.z;
       if(d2(px,pz,d.pos.x,d.pos.z)>cfg.range*cfg.range)continue;
-      /* kill it in flight */
+      /* kill it in flight, and SHOW the interceptor doing it */
       p.intercepted=true;
-      explosion(new THREE.Vector3(px,p.mesh.position.y,pz),0.7);
+      const hit=new THREE.Vector3(px,p.mesh.position.y,pz);
+      const launch=new THREE.Vector3(d.pos.x,d.pos.y+5.5,d.pos.z);
+      tracer(launch,hit);                          /* the interceptor streaking up */
+      const flash=new THREE.Mesh(new THREE.SphereGeometry(0.5,7,6),
+        new THREE.MeshBasicMaterial({color:0x9ff5ea,transparent:true,opacity:0.95}));
+      flash.position.copy(launch);scene.add(flash);
+      G.particles.push({kind:'fade',mesh:flash,life:0.12,max:0.12});
+      explosion(hit,0.7);
       scene.remove(p.mesh);
       G.projectiles.splice(i,1);
       d.icd=cfg.cd;
       if(d.team===G.myTeam)mmPing(px,pz,'#37e0cf');
       break;
+    }
+  }
+}
+
+/* ---------- EW Jammer: cut the drone's link and it falls out of the sky ---------- */
+function jammerTick(dt){
+  const jams=G.ents.filter(e=>!e.dead&&e.cat==='b'&&e.type==='jammer'&&powerRatio(e.team)>=1);
+  if(!jams.length)return;
+  const cfg=BDEF.jammer.jam;
+  for(const u of G.ents){
+    if(u.dead||u.cat!=='u'||!u.def.drone)continue;          /* only drones are jammable */
+    let inside=null;
+    for(const j of jams){
+      if(j.team===u.team)continue;                          /* your own link is keyed in */
+      if(d2(u.pos.x,u.pos.z,j.pos.x,j.pos.z)<=cfg.range*cfg.range){inside=j;break;}
+    }
+    if(!inside){ if(u.jammed){u.jammed=0;} continue; }
+    /* link lost: it stops obeying, wobbles, and comes down */
+    if(!u.jammed){
+      u.jammed=0.0001;
+      if(u.team===G.myTeam){announce('Drone link jammed');sfx.alert();mmPing(u.pos.x,u.pos.z,'#ff5d5d');}
+    }
+    u.jammed+=dt;
+    u.target=null;u.dest=null;
+    u.order={mode:'idle'};
+    u.mesh.rotation.z=Math.sin(u.jammed*22)*0.5;            /* tumbling */
+    u.mesh.rotation.x=Math.sin(u.jammed*17)*0.4;
+    u.hp-=(u.maxhp/cfg.kill)*dt;                            /* dead in ~2.2s */
+    drawBar(u);
+    if(u.hp<=0)killEnt(u);          /* killEnt draws the wreck itself */
+  }
+}
+
+/* ---------- Counter-Battery Radar: whoever fires indirect gets found ---------- */
+function cbSpot(shooter){
+  if(!shooter||shooter.cat!=='u')return;
+  const cfg=BDEF.cbradar.cb;
+  for(const r of G.ents){
+    if(r.dead||r.cat!=='b'||r.type!=='cbradar')continue;
+    if(r.team===shooter.team)continue;
+    if(powerRatio(r.team)<1)continue;
+    if(d2(r.pos.x,r.pos.z,shooter.pos.x,shooter.pos.z)>cfg.range*cfg.range)continue;
+    /* back-plot the firing point: reveal it and hold the reveal */
+    shooter.spotted=Math.max(shooter.spotted||0,cfg.hold);
+    shooter.spottedBy=r.team;
+    if(r.team===G.myTeam){
+      punch(exCtx,shooter.pos.x,shooter.pos.z,16,1);
+      mmPing(shooter.pos.x,shooter.pos.z,'#ffd08a');
+      if(G.t-(G.cbMsg||-99)>8){G.cbMsg=G.t;announce('Counter-battery: enemy gun located');}
+    }
+  }
+}
+function cbTick(dt){
+  for(const u of G.ents){
+    if(u.dead||u.cat!=='u'||!u.spotted)continue;
+    u.spotted-=dt;
+    if(u.spotted<=0){u.spotted=0;u.spottedBy=undefined;continue;}
+    if(u.spottedBy===G.myTeam){
+      u.mesh.visible=true;                                  /* stays lit even through fog */
+      punch(exCtx,u.pos.x,u.pos.z,10,1);
     }
   }
 }
@@ -7420,12 +7494,15 @@ updateBuilding=function(b,dt){
   if(b.type==='samsite'){samTick(b,dt);return;}
   if(b.type==='silo'){siloTick(b,dt);return;}
   if(b.type==='irondome')return;                  /* handled once per tick, not per dome */
+  if(b.type==='jammer'||b.type==='cbradar')return; /* likewise, swept once per tick */
   _updBld6(b,dt);
 };
 const _stepSim6=stepSim;
 stepSim=function(dt){
   _stepSim6(dt);
   ironDomeTick(dt);
+  jammerTick(dt);
+  cbTick(dt);
 };
 
 /* ---------- orders: senders ---------- */
@@ -7806,7 +7883,7 @@ makeUnitMesh=function(type,team){
 };
 const _mkBld0=makeBuildingMesh;
 makeBuildingMesh=function(type,team){
-  const N6=['mechbay','drydock','airhangar','dronetech','bunker','fleetcmd','samsite','irondome','silo'];
+  const N6=['mechbay','drydock','airhangar','dronetech','bunker','fleetcmd','samsite','irondome','silo','jammer','cbradar'];
   if(!N6.includes(type))return _mkBld0(type,team);
   const g=new THREE.Group();const tm=teamMat(team,1),td=teamMat(team,0.55);
   const WM=wallMat(team),DM=doorMat(team),HZ=hazMat();
@@ -7873,6 +7950,37 @@ makeBuildingMesh=function(type,team){
     g.add(cyl(0.06,0.06,2.0,GUN,2.6,2.2,-2.4));                    /* fire-control radar */
     g.add(box(1.4,0.1,0.5,GUN,2.6,3.3,-2.4));
     g.add(lamp(0.16,0.12,0.08,LAMPA,-2.6,1.5,2.6));
+  }else if(type==='jammer'){
+    g.add(box(8,0.3,8,td,0,0.16,0));
+    g.add(box(5.6,2.6,5.0,WM,0,1.45,-0.4));                        /* shielded shed */
+    g.add(box(6.0,0.35,5.4,td,0,2.9,-0.4));
+    g.add(box(2.2,1.7,0.16,DM,0,1.05,2.15));
+    g.add(cyl(0.22,0.22,7.0,GUN,0,6.4,-0.4));                      /* jam mast */
+    for(let i=0;i<3;i++){                                          /* stacked dipole rings */
+      const y=4.6+i*1.6, r=2.2-i*0.5;
+      for(let a=0;a<6;a++){
+        const th=a*1.047;
+        g.add(box(0.12,0.12,r,GUN,Math.cos(th)*r*0.5,y,-0.4+Math.sin(th)*r*0.5));
+      }
+      g.add(cyl(r,r,0.1,PIPE,0,y,-0.4));
+    }
+    g.add(lamp(0.28,0.2,0.14,LAMPA,0,10.1,-0.4));                  /* hazard beacon */
+    g.add(box(1.3,1.1,0.9,PIPE,3.2,0.75,2.4));                     /* generator */
+  }else if(type==='cbradar'){
+    g.add(box(8,0.3,8,td,0,0.16,0));
+    g.add(box(5.0,2.4,4.6,WM,0,1.35,-0.6));                        /* ops hut */
+    g.add(box(5.4,0.35,5.0,td,0,2.7,-0.6));
+    g.add(box(2.4,1.2,0.16,winMat(),0,1.6,1.75));
+    g.add(cyl(0.26,0.26,3.4,GUN,0,4.2,-0.6));                      /* pedestal */
+    const dish=new THREE.Group();                                  /* the phased array panel */
+    dish.add(box(6.4,3.0,0.25,PIPE,0,0,0));
+    dish.add(box(6.6,0.2,0.3,GUN,0,1.6,0));
+    dish.add(box(6.6,0.2,0.3,GUN,0,-1.6,0));
+    for(let i=-2;i<=2;i++)dish.add(box(0.1,2.8,0.3,GUN,i*1.3,0,0.16));
+    dish.rotation.x=-0.42;
+    dish.position.set(0,6.4,-0.6);
+    g.add(dish);g.userData.rotor=dish;                             /* sweeps */
+    g.add(lamp(0.2,0.14,0.1,LAMPA,2.4,2.9,-0.6));
   }else if(type==='irondome'){
     g.add(box(9,0.3,9,td,0,0.16,0));
     g.add(box(5.0,2.0,5.0,WM,0,1.2,0));                            /* bunker plinth */
