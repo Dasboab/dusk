@@ -6711,8 +6711,15 @@ function prodTickTeams(dt,froms){
   }
   refreshSidebar();
 }
+function prodSources(){
+  /* every structure that any unit is produced from, straight off the roster,
+     so adding a unit can never silently orphan its factory again */
+  const s=new Set();
+  for(const k in UDEF)if(UDEF[k].from)s.add(UDEF[k].from);
+  return [...s];
+}
 function prodTick(dt){
-  prodTickTeams(dt,['barracks','factory','navalyard','airfield','airhangar','dronebay','robotics','ewcenter','fleetcmd']);
+  prodTickTeams(dt,prodSources());
 }
 function refreshSidebar(){
   for(const key in sbBtns){
@@ -6890,7 +6897,11 @@ function buildWorld(){
       u.order={mode:'guard',anchor:{x:ox+dx,z:oz+dz}};
     }
   }
-  for(const[s,ox,oz]of MAP.outposts)outpost(teamOf(s),ox,oz);
+  for(const[s,ox,oz]of MAP.outposts){
+    const t=teamOf(s);
+    if(t===0)continue;                    /* never hand the player a free forward base */
+    outpost(t,ox,oz);
+  }
   cam.x=PB[0];cam.z=PB[1];
   }
   initSidebar();refreshSquadUI();
@@ -7111,7 +7122,7 @@ VEH_ORDER.push('scoutcar','aatrack','flametank','artillery','gunship','bomber','
 NAV_ORDER.push('aadestroyer','seamcv');
 INF_ORDER.push('fieldgun');
 G.queues.fleetcmd=[];
-G.queues.mechbay=[];G.queues.drydock=[];G.queues.airhangar=[];G.queues.dronetech=[];G.queues.bunker=[];
+for(const k in UDEF)if(UDEF[k].from&&!G.queues[UDEF[k].from])G.queues[UDEF[k].from]=[];
 
 /* Deterministic search for OPEN water near a latitude. Bases rotate, so a fleet can
    end up wedged against an island; score candidates on the sea room around them and
@@ -8353,7 +8364,7 @@ killEnt=function(e){
 
 /* ---------- production from the new structures ---------- */
 prodTick=function(dt){
-  prodTickTeams(dt,['barracks','factory','navalyard','dronebay','robotics','ewcenter','airfield']);
+  prodTickTeams(dt,prodSources());
 };
 
 /* ---------- terrain dressing ---------- */
@@ -8428,7 +8439,7 @@ buildWorld=function(){
     if(e2){const c=spawnUnit('corvette',e2.x,e2.z,1);c.order={mode:'guard',anchor:{x:e2.x,z:e2.z}};}
   }
   /* forward camps (listed by slot, so they follow whoever holds that corner) */
-  const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:teamOf(c[2])}));
+  const camps=MAP.camps.map(c=>({x:c[0],z:c[1],t:teamOf(c[2])})).filter(c=>c.t!==0);
   camps.forEach((c,idx)=>{
     spawnBuilding('turret',c.x,c.z,c.t);
     if(idx===1)spawnBuilding('dronebay',c.x+8,c.z+7,c.t);
